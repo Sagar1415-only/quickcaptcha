@@ -6,14 +6,16 @@ import os
 
 app = Flask(__name__)
 
-# Store generated CAPTCHAs in memory (simple Phase 1 approach)
+# Store generated CAPTCHAs in memory (temporary storage)
 CAPTCHA_STORE = {}
 
 @app.route("/")
 def home():
     return jsonify({
-        "message": "QuickCaptcha service is live! Use /captcha to get a CAPTCHA.",
-        "endpoints": ["/captcha", "/verify (POST)"]
+        "service": "QuickCaptcha",
+        "status": "live",
+        "endpoints": ["/captcha", "/verify (POST)"],
+        "message": "QuickCaptcha service is live! Use /captcha to get a CAPTCHA."
     })
 
 @app.route("/captcha")
@@ -23,35 +25,37 @@ def generate_captcha():
 
     # Generate CAPTCHA image
     image = ImageCaptcha()
-    data = image.generate(text)
+    data = io.BytesIO()
+    image.write(text, data)
+    data.seek(0)
 
-    # Store CAPTCHA text with a random ID
+    # Create random ID and store the text
     captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
     CAPTCHA_STORE[captcha_id] = text
 
-    # Return image as response with ID in header and JSON info
-    response = send_file(data, mimetype='image/png', headers={"X-Captcha-ID": captcha_id})
+    # Return image with ID in header
+    response = send_file(data, mimetype='image/png')
+    response.headers["X-Captcha-ID"] = captcha_id
     return response
 
 @app.route("/verify", methods=["POST"])
 def verify():
-    # Get captcha ID and user input
-    data = request.json
-    captcha_id = data.get("captcha_id")
-    user_input = data.get("user_input", "").upper()
+    try:
+        data = request.get_json(force=True)
+        captcha_id = data.get("captcha_id")
+        user_input = data.get("user_input", "").upper()
 
-    # Check if captcha exists
-    if not captcha_id or captcha_id not in CAPTCHA_STORE:
-        return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
+        if captcha_id not in CAPTCHA_STORE:
+            return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"}), 400
 
-    # Verify user input
-    if CAPTCHA_STORE[captcha_id] == user_input:
-        del CAPTCHA_STORE[captcha_id]  # Remove after verification
-        return jsonify({"success": True, "message": "CAPTCHA verified!"})
-    else:
-        return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
+        if CAPTCHA_STORE[captcha_id] == user_input:
+            del CAPTCHA_STORE[captcha_id]
+            return jsonify({"success": True, "message": "CAPTCHA verified!"})
+        else:
+            return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Use dynamic port for Render
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
