@@ -1,51 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QuickCaptcha Demo</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickCaptcha Live Demo</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-    #captcha-img { border: 1px solid #ccc; margin: 10px; }
-    input, button { padding: 8px; margin: 5px; font-size: 1em; }
-    .message { margin-top: 15px; font-weight: bold; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f6fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      text-align: center;
+      width: 320px;
+    }
+    img {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+    input {
+      width: 80%;
+      padding: 8px;
+      margin: 10px 0;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 8px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    p {
+      font-size: 14px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
-  <h2>🔐 QuickCaptcha Demo</h2>
-  <img id="captcha-img" src="" alt="CAPTCHA" width="200"><br>
-  <input type="text" id="captcha-input" placeholder="Enter CAPTCHA text">
-  <button onclick="verifyCaptcha()">Verify</button>
-  <button onclick="loadCaptcha()">Refresh</button>
-  <p class="message" id="message"></p>
+  <div class="container">
+    <h2>QuickCaptcha API – Live Demo</h2>
+    <div id="captcha-container">
+      <img id="captcha" src="/captcha" alt="Captcha Loading...">
+    </div>
+    <input type="text" id="captchaInput" placeholder="Enter Captcha" />
+    <br />
+    <button onclick="verifyCaptcha()">Verify</button>
+    <button onclick="refreshCaptcha()">Refresh</button>
+    <p id="result"></p>
+  </div>
 
   <script>
-    let captchaId = "";
-
-    async function loadCaptcha() {
-      const res = await fetch("https://quickcaptcha.onrender.com/captcha");
-      captchaId = res.headers.get("X-Captcha-ID");
-      const blob = await res.blob();
-      document.getElementById("captcha-img").src = URL.createObjectURL(blob);
-      document.getElementById("message").textContent = "";
-      document.getElementById("captcha-input").value = "";
-    }
+    const backend = ""; // leave empty if served from same domain
 
     async function verifyCaptcha() {
-      const userInput = document.getElementById("captcha-input").value;
-      const res = await fetch("https://quickcaptcha.onrender.com/verify", {
+      const userInput = document.getElementById("captchaInput").value;
+      const response = await fetch(`${backend}/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ captcha_id: captchaId, user_input: userInput })
+        body: JSON.stringify({ user_input: userInput })
       });
-      const data = await res.json();
-      const msg = document.getElementById("message");
-      msg.textContent = data.message;
-      msg.style.color = data.success ? "green" : "red";
-      if (data.success) setTimeout(loadCaptcha, 1500);
+      const result = await response.json();
+      document.getElementById("result").innerText = result.message;
     }
 
-    loadCaptcha();
+    function refreshCaptcha() {
+      const captchaImg = document.getElementById("captcha");
+      captchaImg.src = `${backend}/captcha?${Date.now()}`;
+      document.getElementById("result").innerText = "";
+      document.getElementById("captchaInput").value = "";
+    }
   </script>
 </body>
 </html>
