@@ -1,9 +1,8 @@
-from flask import Flask, send_file, request, jsonify, send_from_directory
+from flask import Flask, send_file, request, jsonify
 import os
 import random, string
 from captcha.image import ImageCaptcha
 import io
-
 
 app = Flask(__name__)
 
@@ -11,7 +10,8 @@ app = Flask(__name__)
 CAPTCHA_STORE = {}
 
 @app.route("/")
-def home():
+def index():
+    """Home endpoint providing service info"""
     return jsonify({
         "service": "QuickCaptcha",
         "status": "live",
@@ -21,6 +21,7 @@ def home():
 
 @app.route("/captcha")
 def generate_captcha():
+    """Generate CAPTCHA image and return it with a unique ID"""
     # Generate random 5-character string
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
@@ -41,6 +42,7 @@ def generate_captcha():
 
 @app.route("/verify", methods=["POST"])
 def verify():
+    """Verify the user input against the stored CAPTCHA"""
     try:
         data = request.get_json(force=True)
         captcha_id = data.get("captcha_id")
@@ -50,16 +52,12 @@ def verify():
             return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"}), 400
 
         if CAPTCHA_STORE[captcha_id] == user_input:
-            del CAPTCHA_STORE[captcha_id]
+            del CAPTCHA_STORE[captcha_id]  # Remove after successful verification
             return jsonify({"success": True, "message": "CAPTCHA verified!"})
         else:
             return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-@app.route("/")
-def home():
-    return "QuickCaptcha is live!"
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
