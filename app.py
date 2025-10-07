@@ -6,8 +6,15 @@ import os
 
 app = Flask(__name__)
 
-# Store generated CAPTCHAs in memory for Phase 1 (simple approach)
+# Store generated CAPTCHAs in memory (simple Phase 1 approach)
 CAPTCHA_STORE = {}
+
+@app.route("/")
+def home():
+    return jsonify({
+        "message": "QuickCaptcha service is live! Use /captcha to get a CAPTCHA.",
+        "endpoints": ["/captcha", "/verify (POST)"]
+    })
 
 @app.route("/captcha")
 def generate_captcha():
@@ -22,8 +29,9 @@ def generate_captcha():
     captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
     CAPTCHA_STORE[captcha_id] = text
 
-    # Return image as response with ID
-    return send_file(data, mimetype='image/png', headers={"X-Captcha-ID": captcha_id})
+    # Return image as response with ID in header and JSON info
+    response = send_file(data, mimetype='image/png', headers={"X-Captcha-ID": captcha_id})
+    return response
 
 @app.route("/verify", methods=["POST"])
 def verify():
@@ -33,7 +41,7 @@ def verify():
     user_input = data.get("user_input", "").upper()
 
     # Check if captcha exists
-    if captcha_id not in CAPTCHA_STORE:
+    if not captcha_id or captcha_id not in CAPTCHA_STORE:
         return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
 
     # Verify user input
