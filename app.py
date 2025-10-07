@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, jsonify
+from flask import Flask, send_file, request, jsonify, render_template_string
 import os
 import random, string
 from captcha.image import ImageCaptcha
@@ -7,57 +7,85 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Store generated CAPTCHAs with timestamps
 CAPTCHA_STORE = {}
-
-# Auto-expiry time for CAPTCHAs (e.g., 5 minutes)
 CAPTCHA_EXPIRY = timedelta(minutes=5)
 
 def cleanup_captchas():
-    """Remove expired CAPTCHAs"""
     now = datetime.utcnow()
     expired = [cid for cid, val in CAPTCHA_STORE.items() if val["time"] < now]
     for cid in expired:
         del CAPTCHA_STORE[cid]
 
+# Simple HTML template for frontend
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QuickCaptcha</title>
+</head>
+<body>
+    <h1>QuickCaptcha Service</h1>
+    <p>Click the button to generate a CAPTCHA:</p>
+    <button onclick="getCaptcha()">Generate CAPTCHA</button>
+    <div id="captcha-area" style="margin-top:20px;"></div>
+    <div id="verify-area" style="margin-top:20px;"></div>
+    
+    <script>
+        let currentCaptchaId = "";
+        function getCaptcha() {
+            fetch('/captcha')
+            .then(response => {
+                currentCaptchaId = response.headers.get('X-Captcha-ID');
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                document.getElementById('captcha-area').innerHTML = 
+                    '<img src="' + url + '"><br>' +
+                    '<input type="text" id="captcha-input" placeholder="Enter CAPTCHA">' +
+                    '<button onclick="verifyCaptcha()">Verify</button>';
+                document.getElementById('verify-area').innerHTML = '';
+            });
+        }
+
+        function verifyCaptcha() {
+            const userInput = document.getElementById('captcha-input').value;
+            fetch('/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({captcha_id: currentCaptchaId, user_input: userInput})
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('verify-area').innerText = data.message;
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+
 @app.route("/")
-def index():
-    """Home endpoint showing live service info"""
+def home():
     cleanup_captchas()
-    return jsonify({
-        "service": "QuickCaptcha",
-        "status": "live",
-        "active_captchas": len(CAPTCHA_STORE),
-        "endpoints": ["/captcha", "/verify (POST)"],
-        "message": "QuickCaptcha service is live! Use /captcha to get a CAPTCHA."
-    })
+    return render_template_string(HTML_TEMPLATE)
 
 @app.route("/captcha")
 def generate_captcha():
-    """Generate a CAPTCHA image and return it with an ID"""
     cleanup_captchas()
-
-    # Generate random 5-character string
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-    # Generate CAPTCHA image
     image = ImageCaptcha()
     data = io.BytesIO()
     image.write(text, data)
     data.seek(0)
-
-    # Create random ID and store the text with timestamp
     captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
     CAPTCHA_STORE[captcha_id] = {"text": text, "time": datetime.utcnow()}
-
-    # Return image with ID in header
     response = send_file(data, mimetype='image/png')
     response.headers["X-Captcha-ID"] = captcha_id
     return response
 
 @app.route("/verify", methods=["POST"])
 def verify():
-    """Verify user input against the stored CAPTCHA"""
     try:
         cleanup_captchas()
         data = request.get_json(force=True)
