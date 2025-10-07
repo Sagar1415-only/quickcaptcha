@@ -1,8 +1,9 @@
-from flask import Flask, send_file, request, jsonify
+from flask import Flask, send_file, request, jsonify, send_from_directory
+import os
 import random, string
 from captcha.image import ImageCaptcha
 import io
-import os
+
 
 app = Flask(__name__)
 
@@ -55,6 +56,9 @@ def verify():
             return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+@app.route("/")
+def home():
+    return send_from_directory("docs", "index.html")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
