@@ -1,19 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>QuickCAPTCHA Demo</title>
-    <style>
-        body { font-family: Arial; text-align: center; margin-top: 50px; }
-        input, button { padding: 10px; margin: 5px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickCaptcha Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+    #captcha-img { border: 1px solid #ccc; margin: 10px; }
+    input, button { padding: 8px; margin: 5px; font-size: 1em; }
+    .message { margin-top: 15px; font-weight: bold; }
+  </style>
 </head>
 <body>
-    <h1>QuickCAPTCHA</h1>
-    <p>Secure your website in minutes</p>
-    <img id="captcha" src="https://via.placeholder.com/160x60?text=CAPTCHA" alt="CAPTCHA">
-    <br>
-    <input type="text" id="user_input" placeholder="Enter CAPTCHA">
-    <button onclick="alert('Verification demo!')">Verify</button>
-    <p><small>API integration coming soon</small></p>
+  <h2>🔐 QuickCaptcha Demo</h2>
+  <img id="captcha-img" src="" alt="CAPTCHA" width="200"><br>
+  <input type="text" id="captcha-input" placeholder="Enter CAPTCHA text">
+  <button onclick="verifyCaptcha()">Verify</button>
+  <button onclick="loadCaptcha()">Refresh</button>
+  <p class="message" id="message"></p>
+
+  <script>
+    let captchaId = "";
+
+    async function loadCaptcha() {
+      const res = await fetch("https://quickcaptcha.onrender.com/captcha");
+      captchaId = res.headers.get("X-Captcha-ID");
+      const blob = await res.blob();
+      document.getElementById("captcha-img").src = URL.createObjectURL(blob);
+      document.getElementById("message").textContent = "";
+      document.getElementById("captcha-input").value = "";
+    }
+
+    async function verifyCaptcha() {
+      const userInput = document.getElementById("captcha-input").value;
+      const res = await fetch("https://quickcaptcha.onrender.com/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ captcha_id: captchaId, user_input: userInput })
+      });
+      const data = await res.json();
+      const msg = document.getElementById("message");
+      msg.textContent = data.message;
+      msg.style.color = data.success ? "green" : "red";
+      if (data.success) setTimeout(loadCaptcha, 1500);
+    }
+
+    loadCaptcha();
+  </script>
 </body>
 </html>
