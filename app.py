@@ -3,25 +3,40 @@ import os
 import random, string
 from captcha.image import ImageCaptcha
 import io
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Store generated CAPTCHAs in memory (temporary storage)
+# Store generated CAPTCHAs with timestamps
 CAPTCHA_STORE = {}
+
+# Auto-expiry time for CAPTCHAs (e.g., 5 minutes)
+CAPTCHA_EXPIRY = timedelta(minutes=5)
+
+def cleanup_captchas():
+    """Remove expired CAPTCHAs"""
+    now = datetime.utcnow()
+    expired = [cid for cid, val in CAPTCHA_STORE.items() if val["time"] < now]
+    for cid in expired:
+        del CAPTCHA_STORE[cid]
 
 @app.route("/")
 def index():
-    """Home endpoint providing service info"""
+    """Home endpoint showing live service info"""
+    cleanup_captchas()
     return jsonify({
         "service": "QuickCaptcha",
         "status": "live",
+        "active_captchas": len(CAPTCHA_STORE),
         "endpoints": ["/captcha", "/verify (POST)"],
         "message": "QuickCaptcha service is live! Use /captcha to get a CAPTCHA."
     })
 
 @app.route("/captcha")
 def generate_captcha():
-    """Generate CAPTCHA image and return it with a unique ID"""
+    """Generate a CAPTCHA image and return it with an ID"""
+    cleanup_captchas()
+
     # Generate random 5-character string
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
 
@@ -31,9 +46,9 @@ def generate_captcha():
     image.write(text, data)
     data.seek(0)
 
-    # Create random ID and store the text
+    # Create random ID and store the text with timestamp
     captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-    CAPTCHA_STORE[captcha_id] = text
+    CAPTCHA_STORE[captcha_id] = {"text": text, "time": datetime.utcnow()}
 
     # Return image with ID in header
     response = send_file(data, mimetype='image/png')
@@ -42,17 +57,18 @@ def generate_captcha():
 
 @app.route("/verify", methods=["POST"])
 def verify():
-    """Verify the user input against the stored CAPTCHA"""
+    """Verify user input against the stored CAPTCHA"""
     try:
+        cleanup_captchas()
         data = request.get_json(force=True)
         captcha_id = data.get("captcha_id")
         user_input = data.get("user_input", "").upper()
 
         if captcha_id not in CAPTCHA_STORE:
-            return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"}), 400
+            return jsonify({"success": False, "message": "Invalid or expired CAPTCHA ID!"}), 400
 
-        if CAPTCHA_STORE[captcha_id] == user_input:
-            del CAPTCHA_STORE[captcha_id]  # Remove after successful verification
+        if CAPTCHA_STORE[captcha_id]["text"] == user_input:
+            del CAPTCHA_STORE[captcha_id]
             return jsonify({"success": True, "message": "CAPTCHA verified!"})
         else:
             return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
