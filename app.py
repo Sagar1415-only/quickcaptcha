@@ -58,7 +58,8 @@ def verify():
         return jsonify({"success": False, "error": str(e)}), 500
 @app.route("/")
 def home():
-    return send_from_directory("docs", "index.html")
+    docs_path = os.path.join(os.getcwd(), "docs")
+    return send_from_directory(docs_path, "index.html")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
