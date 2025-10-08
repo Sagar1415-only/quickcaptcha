@@ -1,87 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuickCaptcha Live Demo</title>
-  <style></style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f6fa;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    .container {
-      background: #fff;
-      padding: 25px;
-      border-radius: 15px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      text-align: center;
-      width: 320px;
-    }
-    img {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      margin-bottom: 10px;
-      width: 100%;
-    }
-    input {
-      width: 80%;
-      padding: 8px;
-      margin: 10px 0;
-    }
-    button {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      background-color: #007bff;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    p {
-      font-size: 14px;
-      color: #333;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickCaptcha Service</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            color: #333;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            width: 320px;
+        }
+        h1 {
+            color: #4facfe;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #555;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 15px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background-color: #4facfe;
+            color: white;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        button:hover {
+            background-color: #00c3ff;
+        }
+        img {
+            margin-top: 20px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+        input {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            width: 160px;
+            margin-right: 5px;
+        }
+        .message {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        footer {
+            margin-top: 25px;
+            font-size: 13px;
+            color: #666;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h2>QuickCaptcha API – Live Demo</h2>
-    <div id="captcha-container">
-      <img id="captcha" src="/captcha" alt="Captcha Loading...">
+    <div class="container">
+        <h1>QuickCaptcha</h1>
+        <p>Generate and verify simple CAPTCHAs instantly.</p>
+        <button onclick="generateCaptcha()">Generate CAPTCHA</button>
+        <div id="captchaDiv"></div>
+        <div id="verifyDiv" style="display:none;">
+            <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
+            <button onclick="verifyCaptcha()">Verify</button>
+        </div>
+        <div class="message" id="message"></div>
+        <footer>© 2025 QuickCaptcha API</footer>
     </div>
-    <input type="text" id="captchaInput" placeholder="Enter Captcha" />
-    <br />
-    <button onclick="verifyCaptcha()">Verify</button>
-    <button onclick="refreshCaptcha()">Refresh</button>
-    <p id="result"></p>
-  </div>
 
-  <script>
-    const backend = ""; // leave empty if served from same domain
+    <script>
+    let captchaId = "";
 
-    async function verifyCaptcha() {
-      const userInput = document.getElementById("captchaInput").value;
-      const response = await fetch(`${backend}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_input: userInput })
-      });
-      const result = await response.json();
-      document.getElementById("result").innerText = result.message;
+    function generateCaptcha() {
+        fetch("/captcha")
+            .then(response => {
+                captchaId = response.headers.get("X-Captcha-ID");
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                document.getElementById("captchaDiv").innerHTML = `<img src="${url}" alt="CAPTCHA" width="200" height="70">`;
+                document.getElementById("verifyDiv").style.display = "block";
+                document.getElementById("message").innerText = "";
+            });
     }
 
-    function refreshCaptcha() {
-      const captchaImg = document.getElementById("captcha");
-      captchaImg.src = `${backend}/captcha?${Date.now()}`;
-      document.getElementById("result").innerText = "";
-      document.getElementById("captchaInput").value = "";
+    function verifyCaptcha() {
+        const userInput = document.getElementById("captchaInput").value;
+        fetch("/verify", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({captcha_id: captchaId, user_input: userInput})
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById("message").innerText = data.message;
+            document.getElementById("message").style.color = data.success ? "green" : "red";
+            if(data.success) {
+                document.getElementById("verifyDiv").style.display = "none";
+                document.getElementById("captchaDiv").innerHTML = "";
+            }
+        });
     }
-  </script>
+    </script>
 </body>
 </html>
