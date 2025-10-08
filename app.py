@@ -8,47 +8,92 @@ app = Flask(__name__)
 
 CAPTCHA_STORE = {}
 
-# HTML template with simple CSS
+# Complete HTML + CSS + JS frontend in one file
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuickCaptcha Service</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(to right, #4facfe, #00f2fe);
-            text-align: center;
-            padding: 50px;
-            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
-        h1 { margin-bottom: 30px; }
+        .container {
+            background: white;
+            color: #333;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            width: 320px;
+        }
+        h1 {
+            color: #4facfe;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #555;
+            margin-bottom: 20px;
+        }
         button {
             padding: 10px 20px;
-            font-size: 16px;
+            font-size: 15px;
             margin: 10px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
-            background-color: #fff;
-            color: #4facfe;
+            background-color: #4facfe;
+            color: white;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        button:hover {
+            background-color: #00c3ff;
+        }
+        img {
+            margin-top: 20px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+        input {
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            width: 160px;
+            margin-right: 5px;
+        }
+        .message {
+            margin-top: 15px;
             font-weight: bold;
         }
-        img { margin-top: 20px; }
-        input { padding: 8px; border-radius: 5px; border: none; width: 150px; }
-        .message { margin-top: 15px; font-weight: bold; }
+        footer {
+            margin-top: 25px;
+            font-size: 13px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
-    <h1>QuickCaptcha Service</h1>
-    <p>Click "Generate CAPTCHA" to get a CAPTCHA:</p>
-    <button onclick="generateCaptcha()">Generate CAPTCHA</button>
-    <div id="captchaDiv" style="margin-top:20px;"></div>
-    <div id="verifyDiv" style="margin-top:20px; display:none;">
-        <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
-        <button onclick="verifyCaptcha()">Verify</button>
+    <div class="container">
+        <h1>QuickCaptcha</h1>
+        <p>Generate and verify simple CAPTCHAs instantly.</p>
+        <button onclick="generateCaptcha()">Generate CAPTCHA</button>
+        <div id="captchaDiv"></div>
+        <div id="verifyDiv" style="display:none;">
+            <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
+            <button onclick="verifyCaptcha()">Verify</button>
+        </div>
+        <div class="message" id="message"></div>
+        <footer>© 2025 QuickCaptcha API</footer>
     </div>
-    <div class="message" id="message"></div>
 
 <script>
 let captchaId = "";
@@ -61,7 +106,7 @@ function generateCaptcha() {
         })
         .then(blob => {
             const url = URL.createObjectURL(blob);
-            document.getElementById("captchaDiv").innerHTML = `<img src="${url}" alt="CAPTCHA">`;
+            document.getElementById("captchaDiv").innerHTML = `<img src="${url}" alt="CAPTCHA" width="200" height="70">`;
             document.getElementById("verifyDiv").style.display = "block";
             document.getElementById("message").innerText = "";
         });
@@ -77,6 +122,7 @@ function verifyCaptcha() {
     .then(res => res.json())
     .then(data => {
         document.getElementById("message").innerText = data.message;
+        document.getElementById("message").style.color = data.success ? "green" : "red";
         if(data.success) {
             document.getElementById("verifyDiv").style.display = "none";
             document.getElementById("captchaDiv").innerHTML = "";
@@ -119,9 +165,9 @@ def verify():
 
         if CAPTCHA_STORE[captcha_id] == user_input:
             del CAPTCHA_STORE[captcha_id]
-            return jsonify({"success": True, "message": "CAPTCHA verified!"})
+            return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
         else:
-            return jsonify({"success": False, "message": "Incorrect CAPTCHA!"})
+            return jsonify({"success": False, "message": "❌ Incorrect CAPTCHA!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
