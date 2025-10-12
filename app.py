@@ -129,6 +129,10 @@ function generateCaptcha() {
         document.getElementById("message").innerText = "";
     });
 }
+</script>
+</body>
+</html>
+"""
 
 function verifyCaptcha() {
 @@ -120,34 +90,38 @@ def home():
