@@ -1,3 +1,4 @@
-Flask==2.3.2
-captcha==0.4
+Flask
+captcha
+Pillow==9.5.0
 gunicorn
