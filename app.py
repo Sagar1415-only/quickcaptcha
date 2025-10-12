@@ -4,11 +4,13 @@ import random, string
 from captcha.image import ImageCaptcha
 import io
 import base64
+import os
 
 app = Flask(__name__)
 
 CAPTCHA_STORE = {}
 
+# Complete HTML + CSS + JS frontend with base64 embedded CAPTCHA
 # Complete HTML + CSS + JS frontend
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -16,175 +18,146 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuickCaptcha</title>
+    <title>QuickCaptcha Service</title>
     <style>
         body {
-            font-family: 'Poppins', 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
-            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to right, #a16eff, #8a2be2);
             display: flex;
             justify-content: center;
             align-items: center;
-            color: #333;
+            height: 100vh;
+            margin: 2;
         }
-
         .container {
-            background: #ffffff;
-            padding: 45px 35px;
-            border-radius: 16px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+            background: white;
+            color: #3b2a5a;
+            padding: 50px;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
             text-align: center;
-            width: 340px;
-            transition: 0.4s ease;
+            width: 330px;
         }
-
-        h1 {
-            font-size: 28px;
-            margin-bottom: 8px;
-            color: #5a67d8;
-        }
-
-        p {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 25px;
-        }
-
+        h1 { color: 4facfe; margin-bottom: 10px; }
+        p { color: #3b2a5a; margin-bottom: 20px; }
         button {
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border: none;
-            color: white;
+            padding: 10px 20px;
             font-size: 15px;
-            font-weight: 600;
-            padding: 10px 24px;
+            margin: 10px;
+            border: none;
             border-radius: 8px;
             cursor: pointer;
+            background-color: #4facfe;
+            color: white;
+            font-weight: bold;
             transition: 0.3s;
         }
-
-        button:hover {
-            transform: scale(1.05);
-            background: linear-gradient(90deg, #5a67d8, #6b46c1);
-        }
-
+        button:hover { background-color: #00c3ff; }
+        img { margin-top: 20px; border-radius: 8px; border: 1px solid #ccc; }
         input {
             padding: 8px;
             border-radius: 6px;
             border: 1px solid #ccc;
             width: 160px;
-            margin-right: 8px;
-            text-align: center;
-            font-weight: 500;
+            margin-right: 5px;
         }
-
-        img {
-            margin-top: 20px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .message {
-            margin-top: 18px;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        footer {
-            margin-top: 25px;
-            font-size: 13px;
-            color: #888;
-        }
-
-        .fade-in {
-            animation: fadeIn 0.4s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .message { margin-top: 15px; font-weight: bold; }
+        footer { margin-top: 25px; font-size: 13px; color: #2a1f3d; }
     </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickCaptcha Service</title>
+<style>
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+       background: linear-gradient(to right, #4facfe, #00f2fe); 
+       display:flex; justify-content:center; align-items:center; height:100vh; margin:0;}
+.container { background:white; color:#333; padding:40px; border-radius:15px;
+            box-shadow:0 8px 20px rgba(0,0,0,0.15); text-align:center; width:320px;}
+h1 { color:#4facfe; margin-bottom:10px; }
+p { color:#555; margin-bottom:20px; }
+button { padding:10px 20px; font-size:15px; margin:10px; border:none; border-radius:8px;
+         cursor:pointer; background-color:#4facfe; color:white; font-weight:bold; transition:0.3s; }
+button:hover { background-color:#00c3ff; }
+img { margin-top:20px; border-radius:8px; border:1px solid #ccc; }
+input { padding:8px; border-radius:6px; border:1px solid #ccc; width:160px; margin-right:5px; }
+.message { margin-top:15px; font-weight:bold; }
+footer { margin-top:25px; font-size:13px; color:#666; }
+</style>
 </head>
 <body>
-    <div class="container fade-in">
-        <h1>QuickCaptcha</h1>
-        <p>Simple, secure, and fast CAPTCHA verification</p>
-        <button onclick="generateCaptcha()">Generate CAPTCHA</button>
-        <div id="captchaDiv"></div>
-        <div id="verifyDiv" style="display:none; margin-top:15px;">
-            <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
-            <button onclick="verifyCaptcha()">Verify</button>
-        </div>
-        <div class="message" id="message"></div>
-        <footer>© 2025 QuickCaptcha API</footer>
+<div class="container">
+    <h1>QuickCaptcha</h1>
+    <p>Generate and verify simple CAPTCHAs instantly.</p>
+    <button onclick="generateCaptcha()">Generate CAPTCHA</button>
+    <div id="captchaDiv"></div>
+    <div id="verifyDiv" style="display:none;">
+        <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
+        <button onclick="verifyCaptcha()">Verify</button>
     </div>
+    <div class="message" id="message"></div>
+    <footer>© 2025 QuickCaptcha API</footer>
+<h1>QuickCaptcha</h1>
+<p>Generate and verify simple CAPTCHAs instantly.</p>
+<button onclick="generateCaptcha()">Generate CAPTCHA</button>
+<div id="captchaDiv"></div>
+<div id="verifyDiv" style="display:none;">
+<input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
+<button onclick="verifyCaptcha()">Verify</button>
+</div>
+<div class="message" id="message"></div>
+<footer>© 2025 QuickCaptcha API</footer>
+</div>
 
 <script>
 let captchaId = "";
 
 function generateCaptcha() {
-    fetch("/captcha")
-        .then(response => {
-            captchaId = response.headers.get("X-Captcha-ID");
-            return response.blob();
-        })
-        .then(blob => {
-            const url = URL.createObjectURL(blob);
-            document.getElementById("captchaDiv").innerHTML = 
-                `<img src="${url}" alt="CAPTCHA" width="200" height="70">`;
+   fetch("/captcha")
+        .then(res => res.json())
+        .then(data => {
+            captchaId = data.captcha_id;
+            document.getElementById("captchaDiv").innerHTML =
+                `<img src="data:image/png;base64,${data.image}" alt="CAPTCHA" width="200" height="70">`;
             document.getElementById("verifyDiv").style.display = "block";
             document.getElementById("message").innerText = "";
         });
+    .then(res => res.json())
+    .then(data => {
+        captchaId = data.captcha_id;
+        document.getElementById("captchaDiv").innerHTML = `<img src="data:image/png;base64,${data.image}" width="200" height="70" alt="CAPTCHA">`;
+        document.getElementById("verifyDiv").style.display = "block";
+        document.getElementById("message").innerText = "";
+    });
 }
 
 function verifyCaptcha() {
-    const userInput = document.getElementById("captchaInput").value;
-    fetch("/verify", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({captcha_id: captchaId, user_input: userInput})
-    })
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById("message").innerText = data.message;
-        document.getElementById("message").style.color = data.success ? "#38a169" : "#e53e3e";
-        if(data.success) {
-            document.getElementById("verifyDiv").style.display = "none";
-            document.getElementById("captchaDiv").innerHTML = "";
-        }
-    });
-}
-</script>
-</body>
-</html>
-"""
-
-
-@app.route("/")
-def home():
-    return render_template_string(HTML_TEMPLATE)
+@@ -120,34 +90,38 @@ def home():
 
 @app.route("/captcha")
 def generate_captcha():
     # Generate CAPTCHA text
-    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    image = ImageCaptcha()
-    data = io.BytesIO()
-    image.write(text, data)
-    data.seek(0)
+text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+image = ImageCaptcha()
+data = io.BytesIO()
+image.write(text, data)
+data.seek(0)
 
     # Encode image to base64
     img_base64 = base64.b64encode(data.read()).decode('utf-8')
 
-    captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-    CAPTCHA_STORE[captcha_id] = text
+captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+CAPTCHA_STORE[captcha_id] = text
 
-    return jsonify({"captcha_id": captcha_id, "image": img_base64})
+    # Convert image to base64
+    img_base64 = base64.b64encode(data.getvalue()).decode('utf-8')
+
+return jsonify({"captcha_id": captcha_id, "image": img_base64})
 
 @app.route("/verify", methods=["POST"])
 def verify():
+    data = request.get_json()
+    captcha_id = data.get("captcha_id")
+    user_input = data.get("user_input", "").upper()
     try:
         data = request.get_json(force=True)
         captcha_id = data.get("captcha_id")
@@ -193,6 +166,14 @@ def verify():
         if captcha_id not in CAPTCHA_STORE:
             return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"}), 400
 
+    if captcha_id not in CAPTCHA_STORE:
+        return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
+    
+    if CAPTCHA_STORE[captcha_id] == user_input:
+        del CAPTCHA_STORE[captcha_id]
+        return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
+    else:
+        return jsonify({"success": False, "message": "❌ Incorrect CAPTCHA!"})
         if CAPTCHA_STORE[captcha_id] == user_input:
             del CAPTCHA_STORE[captcha_id]
             return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
@@ -202,5 +183,4 @@ def verify():
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+port = int(os.environ.get("PORT", 5000))
