@@ -14,120 +14,103 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuickCaptcha Service</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(to right, #a16eff, #8a2be2);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 2;
-        }
-        .container {
-            background: white;
-            color: #3b2a5a;
-            padding: 50px;
-            border-radius: 20px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-            text-align: center;
-            width: 330px;
-        }
-        h1 { color: 4facfe; margin-bottom: 10px; }
-        p { color: #3b2a5a; margin-bottom: 20px; }
-        button {
-            padding: 10px 20px;
-            font-size: 15px;
-            margin: 10px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            background-color: #4facfe;
-            color: white;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-        button:hover { background-color: #00c3ff; }
-        img { margin-top: 20px; border-radius: 8px; border: 1px solid #ccc; }
-        input {
-            padding: 8px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            width: 160px;
-            margin-right: 5px;
-        }
-        .message { margin-top: 15px; font-weight: bold; }
-        footer { margin-top: 25px; font-size: 13px; color: #2a1f3d; }
-    </style>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuickCaptcha Service</title>
+<title>QuickCaptcha</title>
 <style>
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-       background: linear-gradient(to right, #4facfe, #00f2fe); 
-       display:flex; justify-content:center; align-items:center; height:100vh; margin:0;}
-.container { background:white; color:#333; padding:40px; border-radius:15px;
-            box-shadow:0 8px 20px rgba(0,0,0,0.15); text-align:center; width:320px;}
-h1 { color:#4facfe; margin-bottom:10px; }
-p { color:#555; margin-bottom:20px; }
-button { padding:10px 20px; font-size:15px; margin:10px; border:none; border-radius:8px;
-         cursor:pointer; background-color:#4facfe; color:white; font-weight:bold; transition:0.3s; }
-button:hover { background-color:#00c3ff; }
-img { margin-top:20px; border-radius:8px; border:1px solid #ccc; }
-input { padding:8px; border-radius:6px; border:1px solid #ccc; width:160px; margin-right:5px; }
-.message { margin-top:15px; font-weight:bold; }
-footer { margin-top:25px; font-size:13px; color:#666; }
+       body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    } 
+    .captcha-container {
+        background-color: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        text-align: center;
+        width: 360px;
+        padding: 30px 25px;
+    }   
+    h1 {
+        margin-bottom: 20px;
+        color: #333;
+        font-size: 1.8rem;
+        font-weight: 600;
+    }   
+    img.captcha {
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        margin-bottom: 15px;
+        max-width: 100%;
+        height: auto;
+    }   
+    input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        font-size: 1rem;
+        margin-bottom: 15px;
+        transition: 0.2s all ease;
+    }
+    input[type="text"]:focus {
+        border-color: #4a90e2;
+        box-shadow: 0 0 5px rgba(74, 144, 226, 0.5);
+        outline: none;
+    }
+   
+    button {
+        background-color: #4a90e2;
+        color: #fff;
+        font-size: 1rem;
+        font-weight: 500;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 100%;
+        padding: 10px;
+        transition: 0.2s all ease;
+    }
+
+    button:hover {
+        background-color: #357abd;
+    }    
+    .refresh-captcha {
+        display: block;
+        margin-top: 10px;
+        font-size: 0.9rem;
+        color: #4a90e2;
+        text-decoration: none;
+        transition: 0.2s color ease;
+    }
+
+    .refresh-captcha:hover {
+        color: #357abd;
+    }    
+    .error {
+        color: #e74c3c;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
 </style>
 </head>
 <body>
-<div class="container">
-    <h1>QuickCaptcha</h1>
-    <p>Generate and verify simple CAPTCHAs instantly.</p>
-    <button onclick="generateCaptcha()">Generate CAPTCHA</button>
-    <div id="captchaDiv"></div>
-    <div id="verifyDiv" style="display:none;">
-        <input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
-        <button onclick="verifyCaptcha()">Verify</button>
+    <div class="captcha-container">
+        <h1>Verify You’re Human</h1>
+        <!-- CAPTCHA Image -->
+        <img src="/captcha" alt="CAPTCHA" class="captcha">
+        <!-- Refresh Link -->
+        <a href="/captcha" class="refresh-captcha">Refresh CAPTCHA</a>
+        <!-- Input Field -->
+        <form method="POST" action="/verify">
+            <input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
+            <button type="submit">Submit</button>
+        </form>
     </div>
-    <div class="message" id="message"></div>
-    <footer>© 2025 QuickCaptcha API</footer>
-<h1>QuickCaptcha</h1>
-<p>Generate and verify simple CAPTCHAs instantly.</p>
-<button onclick="generateCaptcha()">Generate CAPTCHA</button>
-<div id="captchaDiv"></div>
-<div id="verifyDiv" style="display:none;">
-<input type="text" id="captchaInput" placeholder="Enter CAPTCHA">
-<button onclick="verifyCaptcha()">Verify</button>
-</div>
-<div class="message" id="message"></div>
-<footer>© 2025 QuickCaptcha API</footer>
-</div>
-
-<script>
-let captchaId = "";
-
-function generateCaptcha() {
-   fetch("/captcha")
-        .then(res => res.json())
-        .then(data => {
-            captchaId = data.captcha_id;
-            document.getElementById("captchaDiv").innerHTML =
-                `<img src="data:image/png;base64,${data.image}" alt="CAPTCHA" width="200" height="70">`;
-            document.getElementById("verifyDiv").style.display = "block";
-            document.getElementById("message").innerText = "";
-        });
-    .then(res => res.json())
-    .then(data => {
-        captchaId = data.captcha_id;
-        document.getElementById("captchaDiv").innerHTML = `<img src="data:image/png;base64,${data.image}" width="200" height="70" alt="CAPTCHA">`;
-        document.getElementById("verifyDiv").style.display = "block";
-        document.getElementById("message").innerText = "";
-    });
-}
-</script>
 </body>
 </html>
 """
