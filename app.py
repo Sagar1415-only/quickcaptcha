@@ -4,14 +4,12 @@ import random, string
 from captcha.image import ImageCaptcha
 import io
 import base64
-import os
 
 app = Flask(__name__)
 
 CAPTCHA_STORE = {}
 
 # Complete HTML + CSS + JS frontend with base64 embedded CAPTCHA
-# Complete HTML + CSS + JS frontend
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -134,50 +132,33 @@ function generateCaptcha() {
 </html>
 """
 
-function verifyCaptcha() {
-@@ -120,34 +90,38 @@ def home():
-
 @app.route("/captcha")
 def generate_captcha():
     # Generate CAPTCHA text
-text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-image = ImageCaptcha()
-data = io.BytesIO()
-image.write(text, data)
-data.seek(0)
+    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    image = ImageCaptcha()
+    data = io.BytesIO()
+    image.write(text, data)
+    data.seek(0)
 
     # Encode image to base64
-    img_base64 = base64.b64encode(data.read()).decode('utf-8')
-
-captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-CAPTCHA_STORE[captcha_id] = text
-
-    # Convert image to base64
     img_base64 = base64.b64encode(data.getvalue()).decode('utf-8')
 
-return jsonify({"captcha_id": captcha_id, "image": img_base64})
+    captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+    CAPTCHA_STORE[captcha_id] = text
+
+    return jsonify({"captcha_id": captcha_id, "image": img_base64})
 
 @app.route("/verify", methods=["POST"])
 def verify():
-    data = request.get_json()
-    captcha_id = data.get("captcha_id")
-    user_input = data.get("user_input", "").upper()
     try:
         data = request.get_json(force=True)
         captcha_id = data.get("captcha_id")
         user_input = data.get("user_input", "").upper()
 
         if captcha_id not in CAPTCHA_STORE:
-            return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"}), 400
+            return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
 
-    if captcha_id not in CAPTCHA_STORE:
-        return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
-    
-    if CAPTCHA_STORE[captcha_id] == user_input:
-        del CAPTCHA_STORE[captcha_id]
-        return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
-    else:
-        return jsonify({"success": False, "message": "❌ Incorrect CAPTCHA!"})
         if CAPTCHA_STORE[captcha_id] == user_input:
             del CAPTCHA_STORE[captcha_id]
             return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
@@ -187,4 +168,5 @@ def verify():
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
-port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
