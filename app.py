@@ -1,3 +1,12 @@
+from flask import Flask, request, jsonify, render_template_string, send_file
+import os, random, string, io
+from captcha.image import ImageCaptcha
+
+app = Flask(__name__)
+
+CAPTCHA_STORE = {}
+
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -92,7 +101,7 @@
         <button type="submit">Verify</button>
     </form>
     {% if message %}
-    <p class="message">{{ message }}</p>
+    <p class="message" style="color: {{ color }}">{{ message }}</p>
     {% endif %}
 </div>
 
@@ -104,3 +113,36 @@ function refreshCaptcha(e) {
 </script>
 </body>
 </html>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route("/captcha")
+def captcha():
+    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    image = ImageCaptcha()
+    data = io.BytesIO()
+    image.write(text, data)
+    data.seek(0)
+    CAPTCHA_STORE['current'] = text
+    return send_file(data, mimetype='image/png')
+
+@app.route("/verify", methods=["POST"])
+def verify():
+    user_input = request.form.get("captcha", "").strip().upper()
+    correct = CAPTCHA_STORE.get('current', "")
+
+    if user_input == correct:
+        message = "✅ CAPTCHA Verified Successfully!"
+        color = "#2ecc71"
+    else:
+        message = "❌ Incorrect CAPTCHA. Try Again!"
+        color = "#e74c3c"
+
+    return render_template_string(HTML_TEMPLATE, message=message, color=color)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
