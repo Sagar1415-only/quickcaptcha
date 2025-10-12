@@ -1,16 +1,3 @@
-from flask import Flask, request, jsonify, render_template_string
-import os
-import random, string
-from captcha.image import ImageCaptcha
-import io
-import base64
-
-app = Flask(__name__)
-
-CAPTCHA_STORE = {}
-
-# Complete HTML + CSS + JS frontend with base64 embedded CAPTCHA
-HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,138 +5,102 @@ HTML_TEMPLATE = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QuickCaptcha</title>
 <style>
-       body {
+    body {
         margin: 0;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #dfe9f3 0%, #ffffff 100%);
+        height: 100vh;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
-    } 
-    .captcha-container {
-        background-color: rgba(255, 255, 255, 0.95);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+    .captcha-box {
+        background: #fff;
         border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+        padding: 35px 30px;
         text-align: center;
-        width: 360px;
-        padding: 30px 25px;
-    }   
+        width: 350px;
+    }
     h1 {
-        margin-bottom: 20px;
-        color: #333;
-        font-size: 1.8rem;
-        font-weight: 600;
-    }   
-    img.captcha {
+        font-size: 1.7rem;
+        color: #2c3e50;
+        margin-bottom: 25px;
+    }
+    img {
+        border: 1px solid #ddd;
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         margin-bottom: 15px;
-        max-width: 100%;
+        width: 100%;
+        max-width: 260px;
         height: auto;
-    }   
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
     input[type="text"] {
         width: 100%;
-        padding: 10px 12px;
-        border-radius: 6px;
-        border: 1px solid #ccc;
+        padding: 10px;
         font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
         margin-bottom: 15px;
-        transition: 0.2s all ease;
+        transition: all 0.2s ease-in-out;
     }
     input[type="text"]:focus {
-        border-color: #4a90e2;
-        box-shadow: 0 0 5px rgba(74, 144, 226, 0.5);
+        border-color: #3498db;
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.4);
         outline: none;
     }
-   
     button {
-        background-color: #4a90e2;
-        color: #fff;
-        font-size: 1rem;
-        font-weight: 500;
+        background-color: #3498db;
+        color: white;
         border: none;
         border-radius: 6px;
-        cursor: pointer;
+        padding: 10px 0;
         width: 100%;
-        padding: 10px;
-        transition: 0.2s all ease;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: 0.2s ease-in-out;
     }
-
     button:hover {
-        background-color: #357abd;
-    }    
-    .refresh-captcha {
+        background-color: #2980b9;
+    }
+    .refresh {
+        color: #3498db;
+        font-size: 0.9rem;
+        text-decoration: none;
         display: block;
         margin-top: 10px;
-        font-size: 0.9rem;
-        color: #4a90e2;
-        text-decoration: none;
-        transition: 0.2s color ease;
     }
-
-    .refresh-captcha:hover {
-        color: #357abd;
-    }    
-    .error {
-        color: #e74c3c;
-        font-size: 0.9rem;
-        margin-bottom: 10px;
+    .refresh:hover {
+        color: #21618c;
+    }
+    .message {
+        margin-top: 15px;
+        font-weight: 600;
+        color: {{ color | default('#2c3e50') }};
     }
 </style>
 </head>
 <body>
-    <div class="captcha-container">
-        <h1>Verify You’re Human</h1>
-        <!-- CAPTCHA Image -->
-        <img src="/captcha" alt="CAPTCHA" class="captcha">
-        <!-- Refresh Link -->
-        <a href="/captcha" class="refresh-captcha">Refresh CAPTCHA</a>
-        <!-- Input Field -->
-        <form method="POST" action="/verify">
-            <input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
-            <button type="submit">Submit</button>
-        </form>
-    </div>
+<div class="captcha-box">
+    <h1>QuickCaptcha</h1>
+    <form method="POST" action="/verify">
+        <img src="/captcha" alt="CAPTCHA" id="captcha-image">
+        <a href="#" class="refresh" onclick="refreshCaptcha(event)">🔄 Refresh CAPTCHA</a>
+        <input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
+        <button type="submit">Verify</button>
+    </form>
+    {% if message %}
+    <p class="message">{{ message }}</p>
+    {% endif %}
+</div>
+
+<script>
+function refreshCaptcha(e) {
+    e.preventDefault();
+    document.getElementById("captcha-image").src = "/captcha?" + new Date().getTime();
+}
+</script>
 </body>
 </html>
-"""
-
-@app.route("/captcha")
-def generate_captcha():
-    # Generate CAPTCHA text
-    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    image = ImageCaptcha()
-    data = io.BytesIO()
-    image.write(text, data)
-    data.seek(0)
-
-    # Encode image to base64
-    img_base64 = base64.b64encode(data.getvalue()).decode('utf-8')
-
-    captcha_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-    CAPTCHA_STORE[captcha_id] = text
-
-    return jsonify({"captcha_id": captcha_id, "image": img_base64})
-
-@app.route("/verify", methods=["POST"])
-def verify():
-    try:
-        data = request.get_json(force=True)
-        captcha_id = data.get("captcha_id")
-        user_input = data.get("user_input", "").upper()
-
-        if captcha_id not in CAPTCHA_STORE:
-            return jsonify({"success": False, "message": "Invalid CAPTCHA ID!"})
-
-        if CAPTCHA_STORE[captcha_id] == user_input:
-            del CAPTCHA_STORE[captcha_id]
-            return jsonify({"success": True, "message": "✅ CAPTCHA verified!"})
-        else:
-            return jsonify({"success": False, "message": "❌ Incorrect CAPTCHA!"})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
