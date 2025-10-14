@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
-import os, random, string, io, uuid, requests, base64
+from flask import Flask, request, jsonify, render_template_string, send_file, redirect, url_for, session
+import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
 from datetime import datetime
 
@@ -12,9 +12,8 @@ DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "sagar@123")
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 EMAIL_USER = os.environ.get("EMAIL_USER")
 
-# Store API usage and captchas in memory
-api_keys = {}  # { api_key: {email, count, emailed} }
-CAPTCHA_STORE = {}
+api_keys = {}       # free API keys
+CAPTCHA_STORE = {}  # current captcha
 
 # ---------------- EMAIL FUNCTION ----------------
 def send_email(to_email, subject, body):
@@ -35,63 +34,34 @@ def send_email(to_email, subject, body):
     }
     try:
         res = requests.post(url, json=payload, headers=headers)
-        return res.status_code in [200, 201, 202]
+        return res.status_code in [200,201,202]
     except Exception as e:
         print("❌ Email exception:", e)
         return False
-        #......................Pro........................
-# Store Pro API keys
-pro_api_keys = {}  # { api_key: {email, count, limit, paid} }
-@app.route("/generate-pro-key", methods=["POST"])
-def generate_pro_key():
-    if not session.get("dashboard_access"):
-        return jsonify({"error": "Unauthorized"}), 403
-    email = request.json.get("email", "").strip().lower()
-    limit = request.json.get("limit", 1000)
-    key = str(uuid.uuid4())
-    pro_api_keys[key] = {"email": email, "count": 0, "limit": limit, "paid": True}
-
-    send_email(email, "Your QuickCaptcha Pro API Key",
-               f"Hello {email},\n\nYour Pro API key is:\n\n{key}\n\nLimit: {limit} requests.\n\nThank you for upgrading!")
-
-    return jsonify({"api_key": key, "limit": limit})
-
 
 # ---------------- GENERATE CAPTCHA ----------------
-def generate_captcha():
+@app.route("/captcha")
+def captcha():
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    image = ImageCaptcha(width=280, height=90)
+    CAPTCHA_STORE["current"] = text
+    image = ImageCaptcha()
     data = io.BytesIO()
     image.write(text, data)
     data.seek(0)
-    img_base64 = base64.b64encode(data.read()).decode('utf-8')
-    CAPTCHA_STORE["current"] = text
-    return f"data:image/png;base64,{img_base64}"
+    return send_file(data, mimetype="image/png")
 
-# ---------------- ROOT / CAPTCHA PAGE ----------------
+# ---------------- ROOT ----------------
 @app.route("/")
 def home():
-    captcha_text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    CAPTCHA_STORE["current"] = captcha_text
-    captcha_img = f"/captcha?{uuid.uuid4().hex}"  # force reload
-    return render_template_string(HTML_TEMPLATE, captcha_img=captcha_img)
-@app.route("/refresh-captcha")
-def refresh_captcha():
-    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    CAPTCHA_STORE["current"] = text
-    captcha_img = f"/captcha?{uuid.uuid4().hex}"
-    return jsonify({"captcha_img": captcha_img})
+    return render_template_string(HTML_TEMPLATE)
 
-
-
-
+# ---------------- VERIFY ----------------
 @app.route("/verify", methods=["POST"])
 def verify():
     user_input = request.form.get("captcha", "").strip().upper()
     correct = CAPTCHA_STORE.get("current", "")
     message, color = ("✅ CAPTCHA Verified Successfully!", "#2ecc71") if user_input == correct else ("❌ Incorrect CAPTCHA. Try Again!", "#e74c3c")
-    captcha_img = generate_captcha()
-    return render_template_string(HTML_TEMPLATE, captcha_img=captcha_img, message=message, color=color)
+    return render_template_string(HTML_TEMPLATE, message=message, color=color)
 
 # ---------------- GENERATE FREE API KEY ----------------
 @app.route("/generate-free-key", methods=["POST"])
@@ -99,7 +69,6 @@ def generate_key():
     email = request.json.get("email", "").strip().lower()
     if not email:
         return jsonify({"error": "Email required"}), 400
-
     for k, v in api_keys.items():
         if v["email"] == email:
             return jsonify({"api_key": k, "free_limit": FREE_LIMIT})
@@ -107,12 +76,10 @@ def generate_key():
     key = str(uuid.uuid4())
     api_keys[key] = {"email": email, "count": 0, "emailed": False}
 
-    if send_email(email, "Your QuickCaptcha API Key",
-                  f"Hello {email},\n\nYour free API key is:\n\n{key}\n\nLimit: {FREE_LIMIT} requests.\n\nThank you!"):
+    if send_email(email, "Your QuickCaptcha API Key", f"Hello {email},\n\nYour free API key is:\n\n{key}\n\nLimit: {FREE_LIMIT} requests.\n\nThank you!"):
         api_keys[key]["emailed"] = True
 
-    send_email(ADMIN_EMAIL, "🔔 New QuickCaptcha API Registration",
-               f"New API key generated for {email}\nKey: {key}\nTime: {datetime.now()}")
+    send_email(ADMIN_EMAIL, "🔔 New QuickCaptcha API Registration", f"New API key generated for {email}\nKey: {key}\nTime: {datetime.now()}")
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
@@ -122,33 +89,18 @@ def api_verify():
     api_key = request.headers.get("x-api-key") or request.json.get("api_key")
     if not api_key:
         return jsonify({"error": "API key required"}), 401
-
     key_rec = api_keys.get(api_key)
-    if key_rec:  # Free key
-        if key_rec["count"] >= FREE_LIMIT:
-            return jsonify({"error": "Free limit reached"}), 403
-        captcha_input = (request.json.get("captcha_input") or "").strip().upper()
-        if not captcha_input:
-            return jsonify({"error": "captcha_input required"}), 400
-        correct = CAPTCHA_STORE.get("current", "")
-        key_rec["count"] += 1
-        success = captcha_input == correct
-        return jsonify({"success": success, "remaining": FREE_LIMIT - key_rec["count"], "message": "Verified" if success else "Incorrect captcha"})
-
-    key_rec = pro_api_keys.get(api_key)
-    if key_rec:  # Pro key
-        if key_rec["count"] >= key_rec["limit"]:
-            return jsonify({"error": "Pro limit reached"}), 403
-        captcha_input = (request.json.get("captcha_input") or "").strip().upper()
-        if not captcha_input:
-            return jsonify({"error": "captcha_input required"}), 400
-        correct = CAPTCHA_STORE.get("current", "")
-        key_rec["count"] += 1
-        success = captcha_input == correct
-        return jsonify({"success": success, "remaining": key_rec["limit"] - key_rec["count"], "message": "Verified" if success else "Incorrect captcha"})
-
-    return jsonify({"error": "Invalid API key"}), 403
-
+    if not key_rec:
+        return jsonify({"error": "Invalid API key"}), 403
+    if key_rec["count"] >= FREE_LIMIT:
+        return jsonify({"error": "Free limit reached"}), 403
+    captcha_input = (request.json.get("captcha_input") or "").strip().upper()
+    if not captcha_input:
+        return jsonify({"error": "captcha_input required"}), 400
+    correct = CAPTCHA_STORE.get("current", "")
+    key_rec["count"] += 1
+    success = captcha_input == correct
+    return jsonify({"success": success, "remaining": FREE_LIMIT - key_rec["count"], "message": "Verified" if success else "Incorrect captcha"})
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -180,8 +132,8 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>QuickCaptcha</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickCaptcha</title>
 <style>
 body{margin:0;font-family:sans-serif;background:#f0f4f7;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;}
 .captcha-box{background:#fff;padding:30px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.1);text-align:center;width:350px;margin-bottom:20px;}
@@ -209,7 +161,7 @@ button:hover{background:#2980b9;}
 <div class="captcha-box">
 <h1>QuickCaptcha</h1>
 <form method="POST" action="/verify">
-<img src="{{ captcha_img }}" alt="CAPTCHA" id="captcha-image">
+<img src="/captcha" alt="CAPTCHA" id="captcha-image">
 <a href="#" class="refresh" onclick="refreshCaptcha(event)">🔄 Refresh CAPTCHA</a>
 <input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
 <button type="submit">Verify</button>
@@ -218,7 +170,6 @@ button:hover{background:#2980b9;}
 <p style="color:{{color}}">{{ message }}</p>
 {% endif %}
 </div>
-
 <button id="tryFreeBtn">Try it Free</button>
 <div id="signupModal" class="modal">
 <div class="modal-content">
@@ -230,68 +181,33 @@ button:hover{background:#2980b9;}
 <button id="copyKeyBtn">Copy Key</button>
 </div>
 </div>
-
 <script>
-function refreshCaptcha(e){
-    e.preventDefault();
-    fetch('/refresh-captcha').then(r => r.json()).then(d => {
-        document.getElementById('captcha-image').src = d.captcha_img;
-    });
-}
-
-const modal = document.getElementById("signupModal"),
-      tryBtn = document.getElementById("tryFreeBtn"),
-      closeSpan = document.getElementsByClassName("close")[0],
-      getKeyBtn = document.getElementById("getKeyBtn"),
-      emailInput = document.getElementById("emailInput"),
-      apiKeyDisplay = document.getElementById("apiKeyDisplay"),
-      copyKeyBtn = document.getElementById("copyKeyBtn");
-
-tryBtn.onclick = () => modal.style.display = "block";
-closeSpan.onclick = () => modal.style.display = "none";
-window.onclick = e => { if(e.target == modal) modal.style.display = "none"; }
-
-getKeyBtn.onclick = async () => {
-    const email = emailInput.value.trim();
-    if(!email){
-        apiKeyDisplay.className="error"; apiKeyDisplay.textContent="❌ Enter your email"; copyKeyBtn.style.display="none"; return;
-    }
+function refreshCaptcha(e){e.preventDefault();document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
+const modal=document.getElementById("signupModal"),tryBtn=document.getElementById("tryFreeBtn"),closeSpan=document.getElementsByClassName("close")[0],getKeyBtn=document.getElementById("getKeyBtn"),emailInput=document.getElementById("emailInput"),apiKeyDisplay=document.getElementById("apiKeyDisplay"),copyKeyBtn=document.getElementById("copyKeyBtn");
+tryBtn.onclick=()=>modal.style.display="block";
+closeSpan.onclick=()=>modal.style.display="none";
+window.onclick=e=>{if(e.target==modal)modal.style.display="none";}
+getKeyBtn.onclick=async ()=>{
+    const email=emailInput.value.trim();
+    if(!email){apiKeyDisplay.className="error";apiKeyDisplay.textContent="❌ Enter your email";copyKeyBtn.style.display="none";return;}
     try{
-        const res = await fetch("/generate-free-key",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({email})
-        });
-        const data = await res.json();
-        if(data.api_key){
-            apiKeyDisplay.className="success";
-            apiKeyDisplay.textContent = `✅ Your API Key: ${data.api_key} (Limit: ${data.free_limit})`;
-            copyKeyBtn.style.display="inline-block"; copyKeyBtn.textContent="Copy Key";
-        } else if(data.error){
-            apiKeyDisplay.className="error";
-            apiKeyDisplay.textContent = `❌ Error: ${data.error}`;
-            copyKeyBtn.style.display="none";
-        }
-    } catch(err){
-        apiKeyDisplay.className="error";
-        apiKeyDisplay.textContent = "❌ Error generating API key.";
-        copyKeyBtn.style.display="none";
-    }
+        const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
+        const data=await res.json();
+        if(data.api_key){apiKeyDisplay.className="success";apiKeyDisplay.textContent=`✅ Your API Key: ${data.api_key} (Limit: ${data.free_limit})`;copyKeyBtn.style.display="inline-block";copyKeyBtn.textContent="Copy Key";}
+        else if(data.error){apiKeyDisplay.className="error";apiKeyDisplay.textContent=`❌ Error: ${data.error}`;copyKeyBtn.style.display="none";}
+    }catch(err){apiKeyDisplay.className="error";apiKeyDisplay.textContent="❌ Error generating API key.";copyKeyBtn.style.display="none";}
 };
-
-copyKeyBtn.onclick = () => {
-    const keyText = apiKeyDisplay.textContent.split(":")[1]?.split("(")[0].trim();
-    if(keyText){
-        navigator.clipboard.writeText(keyText);
-        copyKeyBtn.textContent="Copied!";
-        setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);
-    }
+copyKeyBtn.onclick=()=>{
+    const keyText=apiKeyDisplay.textContent.split(":")[1]?.split("(")[0].trim();
+    if(keyText){navigator.clipboard.writeText(keyText);copyKeyBtn.textContent="Copied!";setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);}
 };
 </script>
 </body>
 </html>
 """
-DASHBOARD_HTML = """<!DOCTYPE html>
+
+DASHBOARD_HTML = """
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -346,9 +262,6 @@ async function loadData(){
 </html>
 """
 
-
-
 # ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
