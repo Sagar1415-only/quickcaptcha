@@ -83,6 +83,18 @@ def generate_key():
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
+
+@app.route("/generate-pro-key", methods=["POST"])
+def generate_pro_key():
+    if not session.get("dashboard_access"):
+        return jsonify({"error":"Unauthorized"}), 403
+    data = request.json
+    email = data.get("email")
+    limit = data.get("limit", 1000)
+    key = str(uuid.uuid4())
+    pro_api_keys[key] = {"email": email, "count": 0, "limit": limit, "paid": True}
+    return jsonify({"api_key": key, "limit": limit})
+
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
 def api_verify():
@@ -171,6 +183,9 @@ button:hover{background:#2980b9;}
 {% endif %}
 </div>
 <button id="tryFreeBtn">Try it Free</button>
+{% if session.get('dashboard_access') %}
+<button id="getProBtn">Get Pro API Key</button>
+{% endif %}
 <div id="signupModal" class="modal">
 <div class="modal-content">
 <span class="close">&times;</span>
@@ -181,6 +196,18 @@ button:hover{background:#2980b9;}
 <button id="copyKeyBtn">Copy Key</button>
 </div>
 </div>
+<div id="proModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>Generate Pro API Key</h2>
+    <input type="email" id="proEmail" placeholder="User Email" required>
+    <input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
+    <button id="generateProBtn">Generate</button>
+    <p id="proKeyDisplay"></p>
+    <button id="copyProKeyBtn">Copy Key</button>
+  </div>
+</div>
+
 <script>
 function refreshCaptcha(e){e.preventDefault();document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
 const modal=document.getElementById("signupModal"),tryBtn=document.getElementById("tryFreeBtn"),closeSpan=document.getElementsByClassName("close")[0],getKeyBtn=document.getElementById("getKeyBtn"),emailInput=document.getElementById("emailInput"),apiKeyDisplay=document.getElementById("apiKeyDisplay"),copyKeyBtn=document.getElementById("copyKeyBtn");
@@ -202,6 +229,41 @@ copyKeyBtn.onclick=()=>{
     if(keyText){navigator.clipboard.writeText(keyText);copyKeyBtn.textContent="Copied!";setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);}
 };
 </script>
+const proBtn = document.getElementById("getProBtn");
+const proModal = document.getElementById("proModal");
+const closePro = proModal.getElementsByClassName("close")[0];
+
+proBtn.onclick = () => proModal.style.display = "block";
+closePro.onclick = () => proModal.style.display = "none";
+window.onclick = e => { if(e.target == proModal) proModal.style.display = "none"; }
+
+document.getElementById("generateProBtn").onclick = async () => {
+  const email = document.getElementById("proEmail").value.trim();
+  const limit = parseInt(document.getElementById("proLimit").value) || 1000;
+
+  if(!email) { alert("Enter email"); return; }
+
+  const res = await fetch("/generate-pro-key", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({email, limit})
+  });
+
+  const data = await res.json();
+  if(data.api_key){
+    document.getElementById("proKeyDisplay").textContent = `Pro Key: ${data.api_key} (Limit: ${data.limit})`;
+    document.getElementById("copyProKeyBtn").style.display = "inline-block";
+  } else {
+    document.getElementById("proKeyDisplay").textContent = `Error: ${data.error}`;
+  }
+};
+
+document.getElementById("copyProKeyBtn").onclick = () => {
+  const keyText = document.getElementById("proKeyDisplay").textContent.split(":")[1].split("(")[0].trim();
+  navigator.clipboard.writeText(keyText);
+  alert("Copied!");
+};
+
 </body>
 </html>
 """
