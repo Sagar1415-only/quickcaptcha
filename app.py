@@ -242,17 +242,20 @@ def api_verify():
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
-    if request.method == "POST":fapi 
+    if request.method == "POST":
         pwd = request.form.get("password")
         if pwd == DASHBOARD_PASSWORD:
             session["dashboard_access"] = True
             return redirect(url_for("dashboard"))
         return "❌ Wrong password", 403
+
     if not session.get("dashboard_access"):
         return """<form method="POST" style='margin-top:100px;text-align:center;'>
                   <input type="password" name="password" placeholder="Enter dashboard password" required>
                   <button type="submit">Login</button></form>"""
+
     return render_template_string(DASHBOARD_HTML, api_keys=api_keys, free_limit=FREE_LIMIT)
+
 
 @app.route("/logout")
 def logout():
