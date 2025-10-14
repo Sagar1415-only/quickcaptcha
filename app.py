@@ -98,6 +98,26 @@ def generate_pro_key():
 
     return jsonify({"api_key": key, "limit": limit})
 
+#.....pro email...
+@app.route("/request-pro-api", methods=["POST"])
+def request_pro_api():
+    data = request.json
+    email = data.get("email")
+    limit = int(data.get("limit", 1000))
+    if not email:
+        return jsonify({"error":"Email required"}),400
+
+    # Send greeting email to user
+    send_email(email, "Welcome to QuickCaptcha Pro!",
+        f"Hello {email},\n\nThank you for choosing QuickCaptcha Pro!\nPlease reply with your requirements.\nContact: {ADMIN_EMAIL}\n\nLimit requested: {limit}")
+
+    # Notify admin
+    send_email(ADMIN_EMAIL, "New Pro API Request",
+        f"User {email} requested Pro API.\nLimit: {limit}\nTime: {datetime.now()}")
+
+    return jsonify({"status":"ok"})
+
+
 
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
@@ -143,6 +163,7 @@ def refresh_data():
     return jsonify({"api_keys": api_keys})
 
 # ---------------- HTML TEMPLATE ----------------
+
 HTML_TEMPLATE = """<html lang="en">
 <head><meta charset="UTF-8"><title>QuickCaptcha</title><style>
 /* ... your existing CSS ... */
@@ -185,10 +206,8 @@ th { background:#3498db; color:#fff; }
 <button id="copyKeyBtn">Copy Key</button>
 </div>
 </div>
-
 <div id="proModal" class="modal">
   <div class="modal-content">
-    <span class="close">&times;</span>
     <h2>QuickCaptcha Pro Plans</h2>
 
     <table style="width:100%;margin-bottom:15px;text-align:left;">
@@ -215,59 +234,106 @@ th { background:#3498db; color:#fff; }
 
     <input type="email" id="proEmail" placeholder="User Email" required>
     <input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
-    <button id="generateProBtn">Generate</button>
-    <p id="proKeyDisplay"></p>
-    <button id="copyProKeyBtn" style="display:none;">Copy Key</button>
+    <button id="requestProBtn">Request Pro Access</button>
+    <p id="proRequestStatus"></p>
   </div>
 </div>
 
-
 <script>
-function refreshCaptcha(e){e.preventDefault();document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
-const modal=document.getElementById("signupModal"),tryBtn=document.getElementById("tryFreeBtn"),closeSpan=modal.getElementsByClassName("close")[0],getKeyBtn=document.getElementById("getKeyBtn"),emailInput=document.getElementById("emailInput"),apiKeyDisplay=document.getElementById("apiKeyDisplay"),copyKeyBtn=document.getElementById("copyKeyBtn");
-tryBtn.onclick=()=>modal.style.display="block";
-closeSpan.onclick=()=>modal.style.display="none";
-window.onclick=e=>{if(e.target==modal)modal.style.display="none";}
-getKeyBtn.onclick=async ()=>{
-    const email=emailInput.value.trim();
-    if(!email){apiKeyDisplay.className="error";apiKeyDisplay.textContent="❌ Enter your email";copyKeyBtn.style.display="none";return;}
-    try{
-        const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
-        const data=await res.json();
-        if(data.api_key){apiKeyDisplay.className="success";apiKeyDisplay.textContent=`✅ Your API Key: ${data.api_key} (Limit: ${data.free_limit})`;copyKeyBtn.style.display="inline-block";}
-        else if(data.error){apiKeyDisplay.className="error";apiKeyDisplay.textContent=`❌ Error: ${data.error}`;copyKeyBtn.style.display="none";}
-    }catch(err){apiKeyDisplay.className="error";apiKeyDisplay.textContent="❌ Error generating API key.";copyKeyBtn.style.display="none";}
-};
-copyKeyBtn.onclick=()=>{const keyText=apiKeyDisplay.textContent.split(":")[1]?.split("(")[0].trim();if(keyText){navigator.clipboard.writeText(keyText);copyKeyBtn.textContent="Copied!";setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);}}
+const proBtn = document.getElementById("getProBtn");
+if (proBtn) {
+    const proModal = document.getElementById("proModal");
+    proBtn.onclick = () => proModal.style.display = "block";
 
-const proBtn=document.getElementById("getProBtn");
-if(proBtn){
-const proModal=document.getElementById("proModal");
-const closePro=proModal.getElementsByClassName("close")[0];
-proBtn.onclick=()=>proModal.style.display="block";
-closePro.onclick=()=>proModal.style.display="none";
-window.onclick=e=>{if(e.target==proModal)proModal.style.display="none";}
-document.getElementById("generateProBtn").onclick=async()=>{
-    const email=document.getElementById("proEmail").value.trim();
-    const limit=parseInt(document.getElementById("proLimit").value)||1000;
-    if(!email){alert("Enter email");return;}
-    const res=await fetch("/generate-pro-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
-    const data=await res.json();
-    if(data.api_key){
-        document.getElementById("proKeyDisplay").textContent=`Pro Key: ${data.api_key} (Limit: ${data.limit})`;
-        document.getElementById("copyProKeyBtn").style.display="inline-block";
-    }else{document.getElementById("proKeyDisplay").textContent=`Error: ${data.error}`;}
-};
-document.getElementById("copyProKeyBtn").onclick=()=>{
-    const keyText=document.getElementById("proKeyDisplay").textContent.split(":")[1].split("(")[0].trim();
-    navigator.clipboard.writeText(keyText);alert("Copied!");
-};
+    // Disable X close
+    const closePro = proModal.getElementsByClassName("close")[0];
+    if (closePro) closePro.style.display = "none";
+
+    window.onclick = e => { if (e.target == proModal) proModal.style.display = "block"; }
+
+    // Request Pro API
+    document.getElementById("requestProBtn").onclick = async () => {
+        const email = document.getElementById("proEmail").value.trim();
+        const limit = parseInt(document.getElementById("proLimit").value) || 1000;
+        if (!email) { alert("Enter your email"); return; }
+
+        try {
+            const res = await fetch("/request-pro-api", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, limit })
+            });
+            const data = await res.json();
+            if (data.status === "ok") {
+                document.getElementById("proRequestStatus").textContent = 
+                    "✅ Request sent! Check your email for next steps.";
+            } else {
+                document.getElementById("proRequestStatus").textContent = 
+                    `❌ Error: ${data.error || 'Unknown error'}`;
+            }
+        } catch (err) {
+            document.getElementById("proRequestStatus").textContent = "❌ Error sending request.";
+        }
+    };
 }
 </script>
 </body></html>
 """
 
-DASHBOARD_HTML = """..."""  # Keep your existing dashboard
+DASHBOARD_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QuickCaptcha Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{background:#f4f6f9;font-family:sans-serif;margin:0;padding:0;}
+.container{max-width:900px;margin:50px auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.1);}
+h1{text-align:center;color:#2c3e50;}
+table{width:100%;border-collapse:collapse;margin-top:20px;}
+th,td{border:1px solid #ddd;padding:10px;text-align:center;}
+th{background:#3498db;color:#fff;}
+tr:nth-child(even){background:#f2f2f2;}
+button{padding:10px 20px;border:none;border-radius:6px;background:#2980b9;color:#fff;cursor:pointer;margin:10px 0;}
+button:hover{background:#21618c;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>QuickCaptcha Dashboard</h1>
+<button onclick="loadData()">Retrieve Data</button>
+<table id="apiTable">
+<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
+{% for k,v in api_keys.items() %}
+<tr>
+<td>{{v['email']}}</td>
+<td>{{k}}</td>
+<td>{{v['count']}}</td>
+<td>{{free_limit - v['count']}}</td>
+</tr>
+{% endfor %}
+</table>
+<br><center><a href="/logout">Logout</a></center>
+</div>
+<script>
+const FREE_LIMIT = {{ free_limit }};
+async function loadData(){
+    const res = await fetch('/refresh-data');
+    const data = await res.json();
+    const table = document.getElementById('apiTable');
+    table.innerHTML='<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>';
+    for(const [key,val] of Object.entries(data.api_keys)){
+        const row = table.insertRow();
+        row.insertCell(0).innerText = val.email;
+        row.insertCell(1).innerText = key;
+        row.insertCell(2).innerText = val.count;
+        row.insertCell(3).innerText = FREE_LIMIT - val.count;
+    }
+}
+</script>
+</body>
+</html>
+"""  # Keep your existing dashboard
 
 # ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
