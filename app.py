@@ -87,10 +87,17 @@ def generate_pro_key():
         return jsonify({"error":"Unauthorized"}), 403
     data = request.json
     email = data.get("email")
-    limit = data.get("limit", 1000)
+    limit = int(data.get("limit", 1000))
     key = str(uuid.uuid4())
     pro_api_keys[key] = {"email": email, "count": 0, "limit": limit, "paid": True}
+
+    # Send Pro-specific email
+    if send_email(email, "Your QuickCaptcha Pro API Key",
+        f"Hello {email},\n\nYour Pro API key is:\n\n{key}\n\nLimit: {limit} requests/month.\n\n🎯 Features: Custom styling, higher limits, priority support.\n\nThank you for choosing QuickCaptcha!"):
+        print(f"✅ Pro key email sent to {email}")
+
     return jsonify({"api_key": key, "limit": limit})
+
 
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
@@ -139,6 +146,15 @@ def refresh_data():
 HTML_TEMPLATE = """<html lang="en">
 <head><meta charset="UTF-8"><title>QuickCaptcha</title><style>
 /* ... your existing CSS ... */
+body { margin:0; font-family:sans-serif; background:#f9f9f9; }
+.captcha-box { background:#fff; padding:30px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.1); width:360px; text-align:center; }
+button { padding:10px 15px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+#tryFreeBtn, #getProBtn { margin-top:15px; background:#1abc9c; color:#fff; }
+#tryFreeBtn:hover, #getProBtn:hover { background:#16a085; }
+table { width:100%; border-collapse:collapse; }
+th, td { border:1px solid #ddd; padding:10px; text-align:center; }
+th { background:#3498db; color:#fff; }
+.modal-content { background:#fff; padding:20px; border-radius:12px; max-width:400px; margin:10% auto; box-shadow:0 8px 24px rgba(0,0,0,0.15); }
 </style></head>
 <body>
 <div class="captcha-box">
@@ -171,16 +187,40 @@ HTML_TEMPLATE = """<html lang="en">
 </div>
 
 <div id="proModal" class="modal">
-<div class="modal-content">
-<span class="close">&times;</span>
-<h2>Generate Pro API Key</h2>
-<input type="email" id="proEmail" placeholder="User Email" required>
-<input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
-<button id="generateProBtn">Generate</button>
-<p id="proKeyDisplay"></p>
-<button id="copyProKeyBtn">Copy Key</button>
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>QuickCaptcha Pro Plans</h2>
+
+    <table style="width:100%;margin-bottom:15px;text-align:left;">
+      <tr><th>Plan</th><th>Limit</th><th>Price</th><th>Features</th></tr>
+      <tr>
+        <td>Starter</td>
+        <td>1,000 / month</td>
+        <td>₹900 / $9</td>
+        <td>Custom styling, priority support</td>
+      </tr>
+      <tr>
+        <td>Growth</td>
+        <td>5,000 / month</td>
+        <td>₹2,900 / $29</td>
+        <td>All Starter features + branding removal, analytics</td>
+      </tr>
+      <tr>
+        <td>Enterprise</td>
+        <td>20,000+ / month</td>
+        <td>₹9,900 / $99</td>
+        <td>All Growth features + dedicated domain, unlimited analytics</td>
+      </tr>
+    </table>
+
+    <input type="email" id="proEmail" placeholder="User Email" required>
+    <input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
+    <button id="generateProBtn">Generate</button>
+    <p id="proKeyDisplay"></p>
+    <button id="copyProKeyBtn" style="display:none;">Copy Key</button>
+  </div>
 </div>
-</div>
+
 
 <script>
 function refreshCaptcha(e){e.preventDefault();document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
