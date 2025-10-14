@@ -1,113 +1,51 @@
-# app.py — QuickCaptcha full (Phase1 + Phase2 foundation)
-from flask import Flask, request, jsonify, render_template_string, send_file, redirect, url_for, session
-import os, random, string, io, uuid, requests, json
+from flask import Flask, request, jsonify, render_template, send_file, redirect, url_for, session
+import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
-from datetime import datetime, timedelta
-from collections import defaultdict
-
-# Optional stripe import (only used if keys set)
-try:
-    import stripe
-    STRIPE_AVAILABLE = True
-except Exception:
-    stripe = None
-    STRIPE_AVAILABLE = False
+from datetime import datetime
 
 # ---------------- CONFIG ----------------
-app = Flask(__name__, static_folder='free_trial', static_url_path='/free_trial')
+app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey123")
-FREE_LIMIT = int(os.environ.get("FREE_LIMIT", 1000))
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "sagarms121415@gmail.com")
+FREE_LIMIT = 100
+ADMIN_EMAIL = "sagarms121415@gmail.com"
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "sagar@123")
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY")  # Brevo API key
 EMAIL_USER = os.environ.get("EMAIL_USER")  # Verified sender email in Brevo
 
-STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
-STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
-if STRIPE_SECRET_KEY and STRIPE_AVAILABLE:
-    stripe.api_key = STRIPE_SECRET_KEY
-else:
-    STRIPE_AVAILABLE = False
+# Store API usage and captchas in memory
+api_keys = {}  # { api_key: {email, count, emailed} }
+CAPTCHA_STORE = {}
 
-# ---------------- IN-MEMORY STORES ----------------
-api_keys = {}          # { api_key: {email, count, emailed} }
-CAPTCHA_STORE = {}     # e.g. {"current": "AB12C"} or {captcha_id: text} depending usage
-DAILY_USAGE = defaultdict(lambda: defaultdict(int))  # { 'YYYY-MM-DD' : { api_key: count, ... }, ... }
-
-# ---------------- EMAIL FUNCTION USING BREVO API ----------------
+# ---------------- EMAIL FUNCTION ----------------
 def send_email(to_email, subject, body):
     if not BREVO_API_KEY or not EMAIL_USER:
-        print("⚠️ Brevo not configured — skipping email. (Set BREVO_API_KEY and EMAIL_USER)")
+        print("⚠️ Email credentials not set")
         return False
-
     url = "https://api.brevo.com/v3/smtp/email"
     headers = {
         "accept": "application/json",
-        "api-key": BREVO_API_KEY,
-        "content-type": "application/json"
+        "content-type": "application/json",
+        "api-key": BREVO_API_KEY
     }
     payload = {
-        "sender": {"email": EMAIL_USER},
+        "sender": {"name": "QuickCaptcha", "email": EMAIL_USER},
         "to": [{"email": to_email}],
         "subject": subject,
         "htmlContent": f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
     }
-
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"📧 Sent email to {to_email}, status {r.status_code}")
-        if r.status_code in (200, 201, 202):
-            return True
-        else:
-            try:
-                print("❌ Failed to send email:", r.json())
-            except Exception:
-                print("❌ Brevo raw:", r.text)
-            return False
+        response = requests.post(url, json=payload, headers=headers)
+        return response.status_code in [200, 201, 202]
     except Exception as e:
-        print("❌ Brevo exception:", e)
+        print("Email error:", e)
         return False
 
-# ---------------- GENERATE FREE API KEY ----------------
-@app.route("/generate-free-key", methods=["POST"])
-def generate_key():
-    try:
-        data = request.get_json() or {}
-    except Exception:
-        data = {}
-    email = (data.get("email") or "").strip().lower()
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+# ---------------- ROUTES ----------------
 
-    for k, v in api_keys.items():
-        if v.get("email") == email:
-            return jsonify({"api_key": k, "free_limit": FREE_LIMIT})
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-    key = str(uuid.uuid4())
-    api_keys[key] = {"email": email, "count": 0, "emailed": False}
-
-    if send_email(email, "Your QuickCaptcha API Key",
-                  f"Hello {email},\n\nYour free API key:\n\n{key}\n\nLimit: {FREE_LIMIT} requests/month.\n\nThanks,\nQuickCaptcha"):
-        api_keys[key]["emailed"] = True
-
-    send_email(ADMIN_EMAIL, "🔔 New QuickCaptcha Registration",
-               f"New API key created\nUser: {email}\nKey: {key}\nTime: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-    return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
-
-# ---------------- SUBSCRIBE ROUTE ----------------
-@app.route("/subscribe", methods=["POST"])
-def subscribe():
-    email = request.form.get("email") or (request.get_json() or {}).get("email")
-    if not email:
-        return "Email required", 400
-    email = email.strip().lower()
-    with open("subscribers.csv", "a") as f:
-        f.write(f"{email},{datetime.now().isoformat()}\n")
-    send_email(email, "Subscribed to QuickCaptcha", "Thanks for subscribing! We'll notify you of updates.")
-    return redirect("/free_trial/index.html")
-
-# ---------------- CAPTCHA ----------------
 @app.route("/captcha")
 def captcha():
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
@@ -120,82 +58,35 @@ def captcha():
 
 @app.route("/verify", methods=["POST"])
 def verify():
-    user_input = request.form.get("captcha", "").strip().upper()
+    user_input = request.form.get("captcha_input", "").strip().upper()
     correct = CAPTCHA_STORE.get("current", "")
-    message, color = ("✅ CAPTCHA Verified Successfully!", "#2ecc71") if user_input == correct else ("❌ Incorrect CAPTCHA. Try Again!", "#e74c3c")
-    return render_template_string(HTML_TEMPLATE, message=message, color=color)
+    success = user_input == correct
+    message = "✅ CAPTCHA Verified Successfully!" if success else "❌ Incorrect CAPTCHA. Try Again!"
+    color = "#2ecc71" if success else "#e74c3c"
+    return render_template("index.html", message=message, color=color)
 
-# ---------------- API VERIFY ----------------
-@app.route("/api/verify", methods=["POST"])
-def api_verify():
-    api_key = request.headers.get("x-api-key") or (request.json or {}).get("api_key")
-    if not api_key:
-        return jsonify({"error": "API key required"}), 401
-    key_rec = api_keys.get(api_key)
-    if not key_rec:
-        return jsonify({"error": "Invalid API key"}), 403
-    if key_rec["count"] >= FREE_LIMIT:
-        return jsonify({"error": "Free limit reached"}), 403
-    captcha_input = ((request.json or {}).get("captcha_input") or "").strip().upper()
-    if not captcha_input:
-        return jsonify({"error": "captcha_input required"}), 400
+@app.route("/generate-free-key", methods=["POST"])
+def generate_key():
+    email = request.json.get("email", "").strip().lower()
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+    for k, v in api_keys.items():
+        if v["email"] == email:
+            return jsonify({"api_key": k, "free_limit": FREE_LIMIT})
+    key = str(uuid.uuid4())
+    api_keys[key] = {"email": email, "count": 0, "emailed": False}
+    if send_email(email, "Your QuickCaptcha API Key", f"Hello {email},\n\nYour free API key is: {key}\nLimit: {FREE_LIMIT}"):
+        api_keys[key]["emailed"] = True
+    send_email(ADMIN_EMAIL, "New API Registration", f"User: {email}\nAPI Key: {key}\nTime: {datetime.now()}")
+    return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
-    correct = CAPTCHA_STORE.get("current", "")
-    key_rec["count"] += 1
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    DAILY_USAGE[today][api_key] += 1
-
-    success = captcha_input == correct
-    return jsonify({"success": success, "remaining": FREE_LIMIT - key_rec["count"], "message": "Verified" if success else "Incorrect captcha"})
-
-# ---------------- STRIPE CHECKOUT (optional) ----------------
-@app.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
-    if not STRIPE_AVAILABLE:
-        return jsonify({"error": "Stripe not configured on server"}), 500
-    data = request.get_json() or {}
-    plan = data.get("plan", "starter")
-    domain = data.get("domain") or (request.host_url.rstrip("/"))
-    if plan == "pro":
-        price_id = os.environ.get("STRIPE_PRICE_PRO")
-        if not price_id:
-            return jsonify({"error": "Missing STRIPE_PRICE_PRO in env"}), 500
-    else:
-        price_id = os.environ.get("STRIPE_PRICE_STARTER")
-        if not price_id:
-            return jsonify({"error": "Missing STRIPE_PRICE_STARTER in env"}), 500
-    try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}],
-            mode="payment",
-            success_url=f"{domain}/free_trial/index.html?checkout=success",
-            cancel_url=f"{domain}/free_trial/index.html?checkout=cancel",
-        )
-        return jsonify({"id": session.id, "url": session.url})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/stripe-webhook", methods=["POST"])
-def stripe_webhook():
-    if not STRIPE_AVAILABLE:
-        return jsonify({"error": "Stripe not configured"}), 400
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature")
-    endpoint_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
-    try:
-        if endpoint_secret:
-            event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-        else:
-            event = json.loads(payload)
-    except Exception as e:
-        print("⚠️ Stripe webhook error:", e)
-        return "", 400
-
-    if event and event.get("type") == "checkout.session.completed":
-        sess = event["data"]["object"]
-        print("✅ Stripe checkout completed:", sess.get("id"))
-    return "", 200
+@app.route("/subscribe", methods=["POST"])
+def subscribe():
+    email = request.form.get("email", "").strip().lower()
+    if email:
+        with open("subscribers.csv", "a") as f:
+            f.write(f"{email},{datetime.now().isoformat()}\n")
+    return redirect("/")
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -204,9 +95,9 @@ def dashboard():
         pwd = request.form.get("password")
         if pwd == DASHBOARD_PASSWORD:
             session["dashboard_access"] = True
+            return redirect(url_for("dashboard"))
         else:
             return "❌ Wrong password", 403
-
     if not session.get("dashboard_access"):
         return """
         <form method="POST" style='margin-top:100px;text-align:center;'>
@@ -214,15 +105,7 @@ def dashboard():
             <button type="submit">Login</button>
         </form>
         """
-
-    today = datetime.utcnow().date()
-    dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(0,7)][::-1]
-    analytics_table = []
-    for d in dates:
-        row = {"date": d, "total": sum(DAILY_USAGE[d].values()) if d in DAILY_USAGE else 0}
-        analytics_table.append(row)
-
-    return render_template_string(DASHBOARD_HTML, api_keys=api_keys, free_limit=FREE_LIMIT, analytics=analytics_table)
+    return render_template("dashboard.html", api_keys=api_keys, free_limit=FREE_LIMIT)
 
 @app.route("/logout")
 def logout():
@@ -233,24 +116,11 @@ def logout():
 def refresh_data():
     return jsonify({"api_keys": api_keys})
 
-# ---------------- ROOT ----------------
-@app.route("/")
-def home():
-    return render_template_string(HTML_TEMPLATE, message="", color="#000")
+# ---------------- RUN ----------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
-# ---------------- STRIPE STATUS ----------------
-@app.route("/stripe-status")
-def stripe_status():
-    return jsonify({"stripe": STRIPE_AVAILABLE, "publishable": STRIPE_PUBLISHABLE_KEY if STRIPE_AVAILABLE else None})
-
-@app.route("/analytics")
-def analytics_api():
-    out = {}
-    today = datetime.utcnow().date()
-    for i in range(0, 14):
-        d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
-        out[d] = DAILY_USAGE.get(d, {})
-    return jsonify(out)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
