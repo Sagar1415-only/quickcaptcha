@@ -54,36 +54,9 @@ def home():
     return render_template_string(HTML_TEMPLATE)
 
 # ---------------- VERIFY ----------------
-@app.route("/verify-captcha", methods=["POST"])
-def verify_captcha():
-    data = request.get_json()
-    user_input = data.get("user_input", "").strip().upper()
-    correct = session.get("captcha", "")
-    captcha_time = session.get("captcha_time")
-    from datetime import timedelta
 
-    # Check expiry
-    if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
-        return jsonify({"success": False, "message": "CAPTCHA expired. Refresh to try again."})
 
-    # Increment attempts
-    attempts = session.get("captcha_attempts", 0) + 1
-    session["captcha_attempts"] = attempts
-    if attempts > 5:
-        return jsonify({"success": False, "message": "Too many attempts. Refresh CAPTCHA."})
 
-    success = user_input == correct
-
-    # Clear after success
-    if success:
-        session.pop("captcha", None)
-        session.pop("captcha_time", None)
-        session.pop("captcha_attempts", None)
-
-    # Logging
-    print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Success: {success}")
-
-    return jsonify({"success": success})
 
 # ---------------- GENERATE FREE API KEY ----------------
 @app.route("/generate-free-key", methods=["POST"])
