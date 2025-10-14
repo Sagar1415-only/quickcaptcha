@@ -2,22 +2,42 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QuickCaptcha Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<h1>API Dashboard</h1>
-<table border="1" cellpadding="10">
-<tr><th>Email</th><th>API Key</th><th>Tier</th><th>Created At</th></tr>
-{% for email, info in api_keys.items() %}
+<div class="container">
+<h1>QuickCaptcha Dashboard</h1>
+<button onclick="loadData()">Retrieve Data</button>
+<table id="apiTable">
+<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
+{% for k,v in api_keys.items() %}
 <tr>
-  <td>{{ email }}</td>
-  <td>{{ info.key }}</td>
-  <td>{{ info.tier }}</td>
-  <td>{{ info.created_at }}</td>
+<td>{{v['email']}}</td>
+<td>{{k}}</td>
+<td>{{v['count']}}</td>
+<td>{{free_limit - v['count']}}</td>
 </tr>
 {% endfor %}
 </table>
+<br><center><a href="/logout">Logout</a></center>
+</div>
+<script>
+const FREE_LIMIT = {{ free_limit }};
+async function loadData(){
+    const res = await fetch('/refresh-data');
+    const data = await res.json();
+    const table = document.getElementById('apiTable');
+    table.innerHTML='<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>';
+    for(const [key,val] of Object.entries(data.api_keys)){
+        const row = table.insertRow();
+        row.insertCell(0).innerText = val.email;
+        row.insertCell(1).innerText = key;
+        row.insertCell(2).innerText = val.count;
+        row.insertCell(3).innerText = FREE_LIMIT - val.count;
+    }
+}
+</script>
 </body>
 </html>
