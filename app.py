@@ -98,7 +98,7 @@ def generate_pro_key():
 
     return jsonify({"api_key": key, "limit": limit})
 
-#.....pro email...
+# ---------------- PRO REQUEST ----------------
 @app.route("/request-pro-api", methods=["POST"])
 def request_pro_api():
     data = request.json
@@ -116,8 +116,6 @@ def request_pro_api():
         f"User {email} requested Pro API.\nLimit: {limit}\nTime: {datetime.now()}")
 
     return jsonify({"status":"ok"})
-
-
 
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
@@ -163,121 +161,215 @@ def refresh_data():
     return jsonify({"api_keys": api_keys})
 
 # ---------------- HTML TEMPLATE ----------------
-
-HTML_TEMPLATE = """<html lang="en">
-<head><meta charset="UTF-8"><title>QuickCaptcha</title><style>
-/* ... your existing CSS ... */
-body { margin:0; font-family:sans-serif; background:#f9f9f9; }
-.captcha-box { background:#fff; padding:30px; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.1); width:360px; text-align:center; }
-button { padding:10px 15px; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
-#tryFreeBtn, #getProBtn { margin-top:15px; background:#1abc9c; color:#fff; }
-#tryFreeBtn:hover, #getProBtn:hover { background:#16a085; }
-table { width:100%; border-collapse:collapse; }
-th, td { border:1px solid #ddd; padding:10px; text-align:center; }
-th { background:#3498db; color:#fff; }
-.modal-content { background:#fff; padding:20px; border-radius:12px; max-width:400px; margin:10% auto; box-shadow:0 8px 24px rgba(0,0,0,0.15); }
-</style></head>
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QuickCaptcha</title>
+<style>
+body {
+  margin:0; font-family:'Poppins', sans-serif;
+  background:linear-gradient(135deg,#e3f2fd,#f8f9fa);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:100vh;
+}
+h1 { color:#2c3e50; margin-bottom:10px; }
+.container {
+  display:flex; gap:40px; flex-wrap:wrap; justify-content:center;
+  margin-top:20px;
+}
+.card {
+  background:#fff; padding:25px; border-radius:16px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.1);
+  width:320px; text-align:center;
+}
+button {
+  background:#007bff; color:#fff; border:none;
+  border-radius:6px; padding:10px 20px; font-weight:600;
+  cursor:pointer; transition:0.3s;
+}
+button:hover { background:#0056b3; }
+.modal {
+  display:none; position:fixed; z-index:999; left:0; top:0;
+  width:100%; height:100%; background:rgba(0,0,0,0.4);
+}
+.modal-content {
+  background:#fff; border-radius:12px; padding:25px;
+  width:90%; max-width:400px; margin:10% auto;
+  box-shadow:0 10px 25px rgba(0,0,0,0.2);
+  text-align:center;
+}
+input {
+  width:90%; padding:10px; margin:10px 0;
+  border:1px solid #ccc; border-radius:6px;
+}
+.success { color:#2ecc71; }
+.error { color:#e74c3c; }
+table {
+  width:100%; border-collapse:collapse; margin:10px 0;
+}
+th, td {
+  border:1px solid #ddd; padding:8px; text-align:center;
+}
+th {
+  background:#007bff; color:white;
+}
+</style>
+</head>
 <body>
-<div class="captcha-box">
+
 <h1>QuickCaptcha</h1>
-<form method="POST" action="/verify">
-<img src="/captcha" alt="CAPTCHA" id="captcha-image">
-<a href="#" class="refresh" onclick="refreshCaptcha(event)">🔄 Refresh CAPTCHA</a>
-<input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
-<button type="submit">Verify</button>
-</form>
-{% if message %}
-<p style="color:{{color}}">{{ message }}</p>
-{% endif %}
+<p style="color:#555;">Secure. Simple. Smart Captcha Solution</p>
+
+<div class="container">
+  <div class="card">
+    <h2>Free Plan</h2>
+    <p>For developers and small projects</p>
+    <p><b>Limit:</b> 100 requests</p>
+    <div style="margin:10px 0;">
+      <img id="captcha-image" src="/captcha" alt="captcha demo" style="max-width:240px;border-radius:8px;border:1px solid #e6e6e6;">
+      <div><a href="#" onclick="refreshCaptcha(event)" style="color:#007bff;text-decoration:none;">🔄 Refresh CAPTCHA</a></div>
+    </div>
+    <button id="tryFreeBtn">Generate Free Key</button>
+  </div>
+
+  <div class="card">
+    <h2>Pro Plans</h2>
+    <p>For startups & businesses needing more control</p>
+    <button id="getProBtn">View Pro Packages</button>
+  </div>
 </div>
 
-<button id="tryFreeBtn">Try it Free</button>
-{% if session.get('dashboard_access') %}
-<button id="getProBtn">Get Pro API Key</button>
-{% endif %}
-
+<!-- FREE MODAL -->
 <div id="signupModal" class="modal">
-<div class="modal-content">
-<span class="close">&times;</span>
-<h2>Get Your Free QuickCaptcha API Key</h2>
-<input type="email" id="emailInput" placeholder="Enter your email" required>
-<button id="getKeyBtn">Generate Free Key</button>
-<p id="apiKeyDisplay"></p>
-<button id="copyKeyBtn">Copy Key</button>
+  <div class="modal-content">
+   <span class="close" style="float:right;cursor:pointer;font-size:18px;">&times;</span>
+    <h2>Get Your Free QuickCaptcha API Key</h2>
+    <input type="email" id="emailInput" placeholder="Enter your email" required>
+    <button id="getKeyBtn">Generate Free Key</button>
+    <p id="apiKeyDisplay"></p>
+    <button id="copyKeyBtn" style="display:none;">Copy Key</button>
+  </div>
 </div>
-</div>
+
+<!-- PRO MODAL -->
 <div id="proModal" class="modal">
   <div class="modal-content">
-    <h2>QuickCaptcha Pro Plans</h2>
-
-    <table style="width:100%;margin-bottom:15px;text-align:left;">
-      <tr><th>Plan</th><th>Limit</th><th>Price</th><th>Features</th></tr>
-      <tr>
-        <td>Starter</td>
-        <td>1,000 / month</td>
-        <td>₹900 / $9</td>
-        <td>Custom styling, priority support</td>
-      </tr>
-      <tr>
-        <td>Growth</td>
-        <td>5,000 / month</td>
-        <td>₹2,900 / $29</td>
-        <td>All Starter features + branding removal, analytics</td>
-      </tr>
-      <tr>
-        <td>Enterprise</td>
-        <td>20,000+ / month</td>
-        <td>₹9,900 / $99</td>
-        <td>All Growth features + dedicated domain, unlimited analytics</td>
-      </tr>
+  <span class="close" style="float:right;cursor:pointer;font-size:18px;">&times;</span>
+    <h2>QuickCaptcha Pro Packages</h2>
+    <table>
+      <tr><th>Plan</th><th>Limit</th><th>Price</th></tr>
+      <tr><td>Starter</td><td>1,000/mo</td><td>₹199 / $3</td></tr>
+      <tr><td>Growth</td><td>5,000/mo</td><td>₹599 / $8</td></tr>
+      <tr><td>Business</td><td>20,000+/mo</td><td>₹1499 / $18</td></tr>
     </table>
-
-    <input type="email" id="proEmail" placeholder="User Email" required>
-    <input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
+    <p style="font-size:13px;color:#777;">Includes: Custom Styling • Branding Removal • Analytics • Priority Support</p>
+    <input type="email" id="proEmail" placeholder="Your Email" required>
+    <input type="number" id="proLimit" placeholder="Requested Limit (e.g. 5000)" value="1000">
     <button id="requestProBtn">Request Pro Access</button>
     <p id="proRequestStatus"></p>
   </div>
 </div>
 
 <script>
-const proBtn = document.getElementById("getProBtn");
-if (proBtn) {
-    const proModal = document.getElementById("proModal");
-    proBtn.onclick = () => proModal.style.display = "block";
-
-    // Disable X close
-    const closePro = proModal.getElementsByClassName("close")[0];
-    if (closePro) closePro.style.display = "none";
-
-    window.onclick = e => { if (e.target == proModal) proModal.style.display = "block"; }
-
-    // Request Pro API
-    document.getElementById("requestProBtn").onclick = async () => {
-        const email = document.getElementById("proEmail").value.trim();
-        const limit = parseInt(document.getElementById("proLimit").value) || 1000;
-        if (!email) { alert("Enter your email"); return; }
-
-        try {
-            const res = await fetch("/request-pro-api", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, limit })
-            });
-            const data = await res.json();
-            if (data.status === "ok") {
-                document.getElementById("proRequestStatus").textContent = 
-                    "✅ Request sent! Check your email for next steps.";
-            } else {
-                document.getElementById("proRequestStatus").textContent = 
-                    `❌ Error: ${data.error || 'Unknown error'}`;
-            }
-        } catch (err) {
-            document.getElementById("proRequestStatus").textContent = "❌ Error sending request.";
-        }
-    };
+// Refresh Captcha
+function refreshCaptcha(e){
+  if(e) e.preventDefault();
+  const img = document.getElementById("captcha-image");
+  if(img) img.src = "/captcha?"+new Date().getTime();
 }
+
+// --- FREE PLAN MODAL ---
+const freeModal = document.getElementById("signupModal");
+const tryFreeBtn = document.getElementById("tryFreeBtn");
+const freeClose = freeModal?.getElementsByClassName("close")[0];
+const getKeyBtn = document.getElementById("getKeyBtn");
+const emailInput = document.getElementById("emailInput");
+const apiKeyDisplay = document.getElementById("apiKeyDisplay");
+const copyKeyBtn = document.getElementById("copyKeyBtn");
+
+if(tryFreeBtn) tryFreeBtn.onclick = () => freeModal.style.display = "block";
+if(freeClose) freeClose.onclick = () => freeModal.style.display = "none";
+
+if(getKeyBtn){
+  getKeyBtn.onclick = async () => {
+    const email = (emailInput?.value || "").trim();
+    if(!email){ alert("Enter your email"); return; }
+    try {
+      const res = await fetch("/generate-free-key", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({email})
+      });
+      const data = await res.json();
+      if(data.api_key){
+        apiKeyDisplay.innerHTML = "✅ Your API Key: <b>" + data.api_key + "</b>";
+        if(copyKeyBtn) copyKeyBtn.style.display = "inline-block";
+      } else {
+        apiKeyDisplay.textContent = "❌ " + (data.error || "Error generating key");
+      }
+    } catch(err){
+      apiKeyDisplay.textContent = "❌ Error generating API key.";
+    }
+  };
+}
+
+if(copyKeyBtn){
+  copyKeyBtn.onclick = () => {
+    const txt = apiKeyDisplay.innerText.split(":")[1]?.trim();
+    if(txt) {
+      navigator.clipboard.writeText(txt);
+      alert("API key copied to clipboard");
+    }
+  };
+}
+
+// --- PRO PLAN MODAL ---
+const proModal = document.getElementById("proModal");
+const getProBtn = document.getElementById("getProBtn");
+const proClose = proModal?.getElementsByClassName("close")[0];
+const requestProBtn = document.getElementById("requestProBtn");
+const proEmail = document.getElementById("proEmail");
+const proLimit = document.getElementById("proLimit");
+const proStatus = document.getElementById("proRequestStatus");
+
+if(getProBtn) getProBtn.onclick = () => proModal.style.display = "block";
+if(proClose) proClose.onclick = () => proModal.style.display = "none";
+
+if(requestProBtn){
+  requestProBtn.onclick = async () => {
+    const email = (proEmail?.value || "").trim();
+    const limit = parseInt(proLimit?.value) || 1000;
+    if(!email){ alert("Enter email"); return; }
+    try {
+      const res = await fetch("/request-pro-api", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({email, limit})
+      });
+      const data = await res.json();
+      if(data.status === "ok"){
+        proStatus.className = "success";
+        proStatus.textContent = "✅ Request sent! Check your email for next steps.";
+      } else {
+        proStatus.className = "error";
+        proStatus.textContent = "❌ " + (data.error || "Request failed");
+      }
+    } catch(err){
+      proStatus.className = "error";
+      proStatus.textContent = "❌ Request failed";
+    }
+  };
+}
+
+// unified outside click handler
+window.onclick = function(e){
+  if(e.target === freeModal) freeModal.style.display = "none";
+  if(e.target === proModal) proModal.style.display = "none";
+};
 </script>
-</body></html>
+</body>
+</html>
 """
 
 DASHBOARD_HTML = """<!DOCTYPE html>
@@ -333,7 +425,7 @@ async function loadData(){
 </script>
 </body>
 </html>
-"""  # Keep your existing dashboard
+"""
 
 # ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
