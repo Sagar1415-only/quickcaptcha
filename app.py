@@ -75,12 +75,12 @@ def home():
     CAPTCHA_STORE["current"] = captcha_text
     captcha_img = f"/captcha?{uuid.uuid4().hex}"  # force reload
     return render_template_string(HTML_TEMPLATE, captcha_img=captcha_img)
-@app.route("/")
-def home():
-    captcha_text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    CAPTCHA_STORE["current"] = captcha_text
-    captcha_img = f"/captcha?{uuid.uuid4().hex}"  # force reload
-    return render_template_string(HTML_TEMPLATE, captcha_img=captcha_img)
+@app.route("/refresh-captcha")
+def refresh_captcha():
+    text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    CAPTCHA_STORE["current"] = text
+    captcha_img = f"/captcha?{uuid.uuid4().hex}"
+    return jsonify({"captcha_img": captcha_img})
 
 
 
