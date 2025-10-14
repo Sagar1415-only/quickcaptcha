@@ -13,6 +13,7 @@ BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 EMAIL_USER = os.environ.get("EMAIL_USER")
 
 api_keys = {}       # free API keys
+pro_api_keys = {}   # pro API keys
 CAPTCHA_STORE = {}  # current captcha
 
 # ---------------- EMAIL FUNCTION ----------------
@@ -21,11 +22,7 @@ def send_email(to_email, subject, body):
         print("⚠️ Email not configured properly")
         return False
     url = "https://api.brevo.com/v3/smtp/email"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "api-key": BREVO_API_KEY
-    }
+    headers = {"accept": "application/json","content-type": "application/json","api-key": BREVO_API_KEY}
     payload = {
         "sender": {"name": "QuickCaptcha", "email": EMAIL_USER},
         "to": [{"email": to_email}],
@@ -39,7 +36,7 @@ def send_email(to_email, subject, body):
         print("❌ Email exception:", e)
         return False
 
-# ---------------- GENERATE CAPTCHA ----------------
+# ---------------- CAPTCHA ----------------
 @app.route("/captcha")
 def captcha():
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
@@ -83,7 +80,7 @@ def generate_key():
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
-
+# ---------------- GENERATE PRO API KEY ----------------
 @app.route("/generate-pro-key", methods=["POST"])
 def generate_pro_key():
     if not session.get("dashboard_access"):
@@ -138,37 +135,11 @@ def logout():
 def refresh_data():
     return jsonify({"api_keys": api_keys})
 
-# ---------------- HTML TEMPLATES ----------------
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuickCaptcha</title>
-<style>
-body{margin:0;font-family:sans-serif;background:#f0f4f7;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;}
-.captcha-box{background:#fff;padding:30px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.1);text-align:center;width:350px;margin-bottom:20px;}
-h1{color:#2c3e50;margin-bottom:20px;}
-img{border:1px solid #ddd;border-radius:8px;margin-bottom:15px;width:100%;max-width:260px;}
-input[type=text],input[type=email]{width:100%;padding:10px;margin-bottom:15px;border-radius:6px;border:1px solid #ccc;}
-input:focus{border-color:#3498db;box-shadow:0 0 5px rgba(52,152,219,0.4);outline:none;}
-button{width:100%;padding:10px;border-radius:6px;border:none;background:#3498db;color:#fff;cursor:pointer;}
-button:hover{background:#2980b9;}
-.refresh{color:#3498db;text-decoration:none;margin-top:10px;display:block;}
-.refresh:hover{color:#21618c;}
-#tryFreeBtn{margin-top:15px;background:#ff7f50;color:#fff;padding:10px 20px;border-radius:8px;}
-#tryFreeBtn:hover{background:#ff6347;}
-#copyKeyBtn{display:none;margin-top:10px;background:#3498db;color:#fff;border:none;padding:8px 15px;border-radius:6px;cursor:pointer;}
-#copyKeyBtn:hover{background:#2980b9;}
-#apiKeyDisplay.success{color:#2ecc71;font-weight:600;word-break:break-all;margin-top:10px;}
-#apiKeyDisplay.error{color:#e74c3c;font-weight:600;word-break:break-all;margin-top:10px;}
-.modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;overflow:auto;background-color:rgba(0,0,0,0.5);}
-.modal-content{background:#fff;margin:10% auto;padding:20px;border-radius:8px;width:300px;text-align:center;}
-.close{float:right;font-size:28px;font-weight:bold;color:#aaa;cursor:pointer;}
-.close:hover{color:#000;}
-</style>
-</head>
+# ---------------- HTML TEMPLATE ----------------
+HTML_TEMPLATE = """<html lang="en">
+<head><meta charset="UTF-8"><title>QuickCaptcha</title><style>
+/* ... your existing CSS ... */
+</style></head>
 <body>
 <div class="captcha-box">
 <h1>QuickCaptcha</h1>
@@ -182,10 +153,12 @@ button:hover{background:#2980b9;}
 <p style="color:{{color}}">{{ message }}</p>
 {% endif %}
 </div>
+
 <button id="tryFreeBtn">Try it Free</button>
 {% if session.get('dashboard_access') %}
 <button id="getProBtn">Get Pro API Key</button>
 {% endif %}
+
 <div id="signupModal" class="modal">
 <div class="modal-content">
 <span class="close">&times;</span>
@@ -196,21 +169,22 @@ button:hover{background:#2980b9;}
 <button id="copyKeyBtn">Copy Key</button>
 </div>
 </div>
+
 <div id="proModal" class="modal">
-  <div class="modal-content">
-    <span class="close">&times;</span>
-    <h2>Generate Pro API Key</h2>
-    <input type="email" id="proEmail" placeholder="User Email" required>
-    <input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
-    <button id="generateProBtn">Generate</button>
-    <p id="proKeyDisplay"></p>
-    <button id="copyProKeyBtn">Copy Key</button>
-  </div>
+<div class="modal-content">
+<span class="close">&times;</span>
+<h2>Generate Pro API Key</h2>
+<input type="email" id="proEmail" placeholder="User Email" required>
+<input type="number" id="proLimit" placeholder="Limit (default 1000)" value="1000">
+<button id="generateProBtn">Generate</button>
+<p id="proKeyDisplay"></p>
+<button id="copyProKeyBtn">Copy Key</button>
+</div>
 </div>
 
 <script>
 function refreshCaptcha(e){e.preventDefault();document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
-const modal=document.getElementById("signupModal"),tryBtn=document.getElementById("tryFreeBtn"),closeSpan=document.getElementsByClassName("close")[0],getKeyBtn=document.getElementById("getKeyBtn"),emailInput=document.getElementById("emailInput"),apiKeyDisplay=document.getElementById("apiKeyDisplay"),copyKeyBtn=document.getElementById("copyKeyBtn");
+const modal=document.getElementById("signupModal"),tryBtn=document.getElementById("tryFreeBtn"),closeSpan=modal.getElementsByClassName("close")[0],getKeyBtn=document.getElementById("getKeyBtn"),emailInput=document.getElementById("emailInput"),apiKeyDisplay=document.getElementById("apiKeyDisplay"),copyKeyBtn=document.getElementById("copyKeyBtn");
 tryBtn.onclick=()=>modal.style.display="block";
 closeSpan.onclick=()=>modal.style.display="none";
 window.onclick=e=>{if(e.target==modal)modal.style.display="none";}
@@ -220,109 +194,40 @@ getKeyBtn.onclick=async ()=>{
     try{
         const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
         const data=await res.json();
-        if(data.api_key){apiKeyDisplay.className="success";apiKeyDisplay.textContent=`✅ Your API Key: ${data.api_key} (Limit: ${data.free_limit})`;copyKeyBtn.style.display="inline-block";copyKeyBtn.textContent="Copy Key";}
+        if(data.api_key){apiKeyDisplay.className="success";apiKeyDisplay.textContent=`✅ Your API Key: ${data.api_key} (Limit: ${data.free_limit})`;copyKeyBtn.style.display="inline-block";}
         else if(data.error){apiKeyDisplay.className="error";apiKeyDisplay.textContent=`❌ Error: ${data.error}`;copyKeyBtn.style.display="none";}
     }catch(err){apiKeyDisplay.className="error";apiKeyDisplay.textContent="❌ Error generating API key.";copyKeyBtn.style.display="none";}
 };
-copyKeyBtn.onclick=()=>{
-    const keyText=apiKeyDisplay.textContent.split(":")[1]?.split("(")[0].trim();
-    if(keyText){navigator.clipboard.writeText(keyText);copyKeyBtn.textContent="Copied!";setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);}
+copyKeyBtn.onclick=()=>{const keyText=apiKeyDisplay.textContent.split(":")[1]?.split("(")[0].trim();if(keyText){navigator.clipboard.writeText(keyText);copyKeyBtn.textContent="Copied!";setTimeout(()=>{copyKeyBtn.textContent="Copy Key";},2000);}}
+
+const proBtn=document.getElementById("getProBtn");
+if(proBtn){
+const proModal=document.getElementById("proModal");
+const closePro=proModal.getElementsByClassName("close")[0];
+proBtn.onclick=()=>proModal.style.display="block";
+closePro.onclick=()=>proModal.style.display="none";
+window.onclick=e=>{if(e.target==proModal)proModal.style.display="none";}
+document.getElementById("generateProBtn").onclick=async()=>{
+    const email=document.getElementById("proEmail").value.trim();
+    const limit=parseInt(document.getElementById("proLimit").value)||1000;
+    if(!email){alert("Enter email");return;}
+    const res=await fetch("/generate-pro-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
+    const data=await res.json();
+    if(data.api_key){
+        document.getElementById("proKeyDisplay").textContent=`Pro Key: ${data.api_key} (Limit: ${data.limit})`;
+        document.getElementById("copyProKeyBtn").style.display="inline-block";
+    }else{document.getElementById("proKeyDisplay").textContent=`Error: ${data.error}`;}
 };
-</script>
-const proBtn = document.getElementById("getProBtn");
-const proModal = document.getElementById("proModal");
-const closePro = proModal.getElementsByClassName("close")[0];
-
-proBtn.onclick = () => proModal.style.display = "block";
-closePro.onclick = () => proModal.style.display = "none";
-window.onclick = e => { if(e.target == proModal) proModal.style.display = "none"; }
-
-document.getElementById("generateProBtn").onclick = async () => {
-  const email = document.getElementById("proEmail").value.trim();
-  const limit = parseInt(document.getElementById("proLimit").value) || 1000;
-
-  if(!email) { alert("Enter email"); return; }
-
-  const res = await fetch("/generate-pro-key", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({email, limit})
-  });
-
-  const data = await res.json();
-  if(data.api_key){
-    document.getElementById("proKeyDisplay").textContent = `Pro Key: ${data.api_key} (Limit: ${data.limit})`;
-    document.getElementById("copyProKeyBtn").style.display = "inline-block";
-  } else {
-    document.getElementById("proKeyDisplay").textContent = `Error: ${data.error}`;
-  }
+document.getElementById("copyProKeyBtn").onclick=()=>{
+    const keyText=document.getElementById("proKeyDisplay").textContent.split(":")[1].split("(")[0].trim();
+    navigator.clipboard.writeText(keyText);alert("Copied!");
 };
-
-document.getElementById("copyProKeyBtn").onclick = () => {
-  const keyText = document.getElementById("proKeyDisplay").textContent.split(":")[1].split("(")[0].trim();
-  navigator.clipboard.writeText(keyText);
-  alert("Copied!");
-};
-
-</body>
-</html>
-"""
-
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>QuickCaptcha Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-body{background:#f4f6f9;font-family:sans-serif;margin:0;padding:0;}
-.container{max-width:900px;margin:50px auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.1);}
-h1{text-align:center;color:#2c3e50;}
-table{width:100%;border-collapse:collapse;margin-top:20px;}
-th,td{border:1px solid #ddd;padding:10px;text-align:center;}
-th{background:#3498db;color:#fff;}
-tr:nth-child(even){background:#f2f2f2;}
-button{padding:10px 20px;border:none;border-radius:6px;background:#2980b9;color:#fff;cursor:pointer;margin:10px 0;}
-button:hover{background:#21618c;}
-</style>
-</head>
-<body>
-<div class="container">
-<h1>QuickCaptcha Dashboard</h1>
-<button onclick="loadData()">Retrieve Data</button>
-<table id="apiTable">
-<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
-{% for k,v in api_keys.items() %}
-<tr>
-<td>{{v['email']}}</td>
-<td>{{k}}</td>
-<td>{{v['count']}}</td>
-<td>{{free_limit - v['count']}}</td>
-</tr>
-{% endfor %}
-</table>
-<br><center><a href="/logout">Logout</a></center>
-</div>
-<script>
-const FREE_LIMIT = {{ free_limit }};
-async function loadData(){
-    const res = await fetch('/refresh-data');
-    const data = await res.json();
-    const table = document.getElementById('apiTable');
-    table.innerHTML='<tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>';
-    for(const [key,val] of Object.entries(data.api_keys)){
-        const row = table.insertRow();
-        row.insertCell(0).innerText = val.email;
-        row.insertCell(1).innerText = key;
-        row.insertCell(2).innerText = val.count;
-        row.insertCell(3).innerText = FREE_LIMIT - val.count;
-    }
 }
 </script>
-</body>
-</html>
+</body></html>
 """
+
+DASHBOARD_HTML = """..."""  # Keep your existing dashboard
 
 # ---------------- RUN SERVER ----------------
 if __name__ == "__main__":
