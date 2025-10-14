@@ -117,6 +117,16 @@ def request_pro_api():
 
     return jsonify({"status":"ok"})
 
+# ---------------- VERIFY CAPTCHA INPUT ----------------
+@app.route("/verify-captcha", methods=["POST"])
+def verify_captcha():
+    data = request.get_json()
+    user_input = data.get("user_input", "").strip().upper()
+    correct = CAPTCHA_STORE.get("current", "")
+    if user_input == correct:
+        return jsonify({"success": True})
+    return jsonify({"success": False})
+
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
 def api_verify():
@@ -167,6 +177,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <title>QuickCaptcha</title>
 <style>
+.captcha-verify {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+.captcha-verify input {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  width: 150px;
+}
+.captcha-verify button {
+  padding: 8px 12px;
+  border: none;
+  background: #007bff;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#captchaResult {
+  font-weight: 600;
+}
+
 body {
   margin:0; font-family:'Poppins', sans-serif;
   background:linear-gradient(135deg,#e3f2fd,#f8f9fa);
@@ -230,6 +265,12 @@ th {
       <img id="captcha-image" src="/captcha" alt="captcha demo" style="max-width:240px;border-radius:8px;border:1px solid #e6e6e6;">
       <div><a href="#" onclick="refreshCaptcha(event)" style="color:#007bff;text-decoration:none;">🔄 Refresh CAPTCHA</a></div>
     </div>
+    <div class="captcha-verify">
+  <input type="text" id="captchaInput" placeholder="Enter Captcha">
+  <button id="verifyCaptchaBtn">Verify</button>
+  <p id="captchaResult"></p>
+</div>
+
     <button id="tryFreeBtn">Generate Free Key</button>
   </div>
 
@@ -366,6 +407,31 @@ if(requestProBtn){
 window.onclick = function(e){
   if(e.target === freeModal) freeModal.style.display = "none";
   if(e.target === proModal) proModal.style.display = "none";
+};
+// --- CAPTCHA VERIFY ---
+document.getElementById("verifyCaptchaBtn").onclick = async () => {
+  const input = document.getElementById("captchaInput").value.trim();
+  if (!input) { alert("Please enter captcha"); return; }
+
+  try {
+    const res = await fetch("/verify-captcha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_input: input })
+    });
+    const data = await res.json();
+    const result = document.getElementById("captchaResult");
+    if (data.success) {
+      result.style.color = "green";
+      result.textContent = "✅ Captcha verified successfully!";
+    } else {
+      result.style.color = "red";
+      result.textContent = "❌ Incorrect captcha. Try again!";
+      refreshCaptcha();
+    }
+  } catch (err) {
+    document.getElementById("captchaResult").textContent = "⚠️ Error verifying captcha";
+  }
 };
 </script>
 </body>
