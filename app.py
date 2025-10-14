@@ -40,7 +40,8 @@ def send_email(to_email, subject, body):
 @app.route("/captcha")
 def captcha():
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-    CAPTCHA_STORE["current"] = text
+    session['captcha'] = text
+    session['captcha_time'] = datetime.now()
     image = ImageCaptcha()
     data = io.BytesIO()
     image.write(text, data)
@@ -53,12 +54,36 @@ def home():
     return render_template_string(HTML_TEMPLATE)
 
 # ---------------- VERIFY ----------------
-@app.route("/verify", methods=["POST"])
-def verify():
-    user_input = request.form.get("captcha", "").strip().upper()
-    correct = CAPTCHA_STORE.get("current", "")
-    message, color = ("✅ CAPTCHA Verified Successfully!", "#2ecc71") if user_input == correct else ("❌ Incorrect CAPTCHA. Try Again!", "#e74c3c")
-    return render_template_string(HTML_TEMPLATE, message=message, color=color)
+@app.route("/verify-captcha", methods=["POST"])
+def verify_captcha():
+    data = request.get_json()
+    user_input = data.get("user_input", "").strip().upper()
+    correct = session.get("captcha", "")
+    captcha_time = session.get("captcha_time")
+    from datetime import timedelta
+
+    # Check expiry
+    if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
+        return jsonify({"success": False, "message": "CAPTCHA expired. Refresh to try again."})
+
+    # Increment attempts
+    attempts = session.get("captcha_attempts", 0) + 1
+    session["captcha_attempts"] = attempts
+    if attempts > 5:
+        return jsonify({"success": False, "message": "Too many attempts. Refresh CAPTCHA."})
+
+    success = user_input == correct
+
+    # Clear after success
+    if success:
+        session.pop("captcha", None)
+        session.pop("captcha_time", None)
+        session.pop("captcha_attempts", None)
+
+    # Logging
+    print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Success: {success}")
+
+    return jsonify({"success": success})
 
 # ---------------- GENERATE FREE API KEY ----------------
 @app.route("/generate-free-key", methods=["POST"])
@@ -75,9 +100,10 @@ def generate_key():
 
     if send_email(email, "Your QuickCaptcha API Key", f"Hello {email},\n\nYour free API key is:\n\n{key}\n\nLimit: {FREE_LIMIT} requests.\n\nThank you!"):
         api_keys[key]["emailed"] = True
+        print(f"[ADMIN LOG] Email sent to: {email}")
 
     send_email(ADMIN_EMAIL, "🔔 New QuickCaptcha API Registration", f"New API key generated for {email}\nKey: {key}\nTime: {datetime.now()}")
-
+    print(f"[ADMIN LOG] Admin notified for new registration: {email}")
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
 # ---------------- GENERATE PRO API KEY ----------------
@@ -110,46 +136,101 @@ def request_pro_api():
     # Send greeting email to user
     send_email(email, "Welcome to QuickCaptcha Pro!",
         f"Hello {email},\n\nThank you for choosing QuickCaptcha Pro!\nPlease reply with your requirements.\nContact: {ADMIN_EMAIL}\n\nLimit requested: {limit}")
+    print(f"[ADMIN LOG] Pro request email sent to: {email}")
 
     # Notify admin
     send_email(ADMIN_EMAIL, "New Pro API Request",
         f"User {email} requested Pro API.\nLimit: {limit}\nTime: {datetime.now()}")
-
+print(f"[ADMIN LOG] Admin notified for Pro request by: {email}")
     return jsonify({"status":"ok"})
 
 # ---------------- VERIFY CAPTCHA INPUT ----------------
+# ---------------- VERIFY CAPTCHA ----------------
 @app.route("/verify-captcha", methods=["POST"])
 def verify_captcha():
     data = request.get_json()
     user_input = data.get("user_input", "").strip().upper()
-    correct = CAPTCHA_STORE.get("current", "")
-    if user_input == correct:
-        return jsonify({"success": True})
-    return jsonify({"success": False})
+    correct = session.get("captcha", "")
+    captcha_time = session.get("captcha_time")
+    from datetime import timedelta
 
+    # Check expiry
+    if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
+        return jsonify({"success": False, "message": "CAPTCHA expired. Refresh to try again."})
+
+    # Increment attempts
+    attempts = session.get("captcha_attempts", 0) + 1
+    session["captcha_attempts"] = attempts
+    if attempts > 5:
+        return jsonify({"success": False, "message": "Too many attempts. Refresh CAPTCHA."})
+
+    success = user_input == correct
+
+    # Clear after success
+    if success:
+        session.pop("captcha", None)
+        session.pop("captcha_time", None)
+        session.pop("captcha_attempts", None)
+
+    # Logging
+    print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Success: {success}")
+
+    return jsonify({"success": success})
+
+
+# ---------------- API VERIFY ----------------
 # ---------------- API VERIFY ----------------
 @app.route("/api/verify", methods=["POST"])
 def api_verify():
     api_key = request.headers.get("x-api-key") or request.json.get("api_key")
     if not api_key:
         return jsonify({"error": "API key required"}), 401
-    key_rec = api_keys.get(api_key)
+
+    key_rec = api_keys.get(api_key) or pro_api_keys.get(api_key)
     if not key_rec:
         return jsonify({"error": "Invalid API key"}), 403
-    if key_rec["count"] >= FREE_LIMIT:
-        return jsonify({"error": "Free limit reached"}), 403
+
+    # Check limit
+    limit = key_rec.get("limit", FREE_LIMIT)
+    if key_rec["count"] >= limit:
+        return jsonify({"error": "API limit reached"}), 403
+
     captcha_input = (request.json.get("captcha_input") or "").strip().upper()
     if not captcha_input:
         return jsonify({"error": "captcha_input required"}), 400
-    correct = CAPTCHA_STORE.get("current", "")
+
+    correct = session.get("captcha", "")
+    captcha_time = session.get("captcha_time")
+    from datetime import timedelta
+
+    # Check expiry
+    if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
+        success = False
+        message = "CAPTCHA expired. Refresh to try again."
+    else:
+        success = captcha_input == correct
+        message = "Verified" if success else "Incorrect captcha"
+
+    # Increment count & clear captcha on success
+    if success:
+        session.pop("captcha", None)
+        session.pop("captcha_time", None)
+        session.pop("captcha_attempts", None)
     key_rec["count"] += 1
-    success = captcha_input == correct
-    return jsonify({"success": success, "remaining": FREE_LIMIT - key_rec["count"], "message": "Verified" if success else "Incorrect captcha"})
+
+    # Logging
+    print(f"[API LOG] {datetime.now()} | IP: {request.remote_addr} | Key: {api_key} | Input: {captcha_input} | Success: {success}")
+
+    return jsonify({
+        "success": success,
+        "remaining": limit - key_rec["count"],
+        "message": message
+    })
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
-    if request.method == "POST":
+    if request.method == "POST":fapi 
         pwd = request.form.get("password")
         if pwd == DASHBOARD_PASSWORD:
             session["dashboard_access"] = True
@@ -409,10 +490,14 @@ window.onclick = function(e){
   if(e.target === proModal) proModal.style.display = "none";
 };
 // --- CAPTCHA VERIFY ---
+// --- CAPTCHA VERIFY ---
 document.getElementById("verifyCaptchaBtn").onclick = async () => {
   const input = document.getElementById("captchaInput").value.trim();
   if (!input) { alert("Please enter captcha"); return; }
 
+  const result = document.getElementById("captchaResult");
+  result.textContent = "";
+  
   try {
     const res = await fetch("/verify-captcha", {
       method: "POST",
@@ -420,19 +505,21 @@ document.getElementById("verifyCaptchaBtn").onclick = async () => {
       body: JSON.stringify({ user_input: input })
     });
     const data = await res.json();
-    const result = document.getElementById("captchaResult");
+
     if (data.success) {
       result.style.color = "green";
       result.textContent = "✅ Captcha verified successfully!";
     } else {
       result.style.color = "red";
-      result.textContent = "❌ Incorrect captcha. Try again!";
+      result.textContent = "❌ " + (data.message || "Incorrect captcha. Try again!");
       refreshCaptcha();
     }
   } catch (err) {
-    document.getElementById("captchaResult").textContent = "⚠️ Error verifying captcha";
+    result.style.color = "orange";
+    result.textContent = "⚠️ Error verifying captcha";
   }
 };
+
 </script>
 </body>
 </html>
