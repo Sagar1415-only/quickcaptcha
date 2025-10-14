@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickCaptcha Dashboard</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<h1>API Dashboard</h1>
+<table border="1" cellpadding="10">
+<tr><th>Email</th><th>API Key</th><th>Tier</th><th>Created At</th></tr>
+{% for email, info in api_keys.items() %}
+<tr>
+  <td>{{ email }}</td>
+  <td>{{ info.key }}</td>
+  <td>{{ info.tier }}</td>
+  <td>{{ info.created_at }}</td>
+</tr>
+{% endfor %}
+</table>
+</body>
+</html>
