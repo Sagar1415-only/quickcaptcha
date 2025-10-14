@@ -3,45 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QuickCaptcha — Lightweight CAPTCHA API</title>
+<title>QuickCaptcha</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<script src="{{ url_for('static', filename='script.js') }}"></script>
 </head>
 <body>
-
-<header>
-  <h1>QuickCaptcha</h1>
-  <p>Lightweight, privacy-first CAPTCHA API — free tier available.</p>
-  <button onclick="showCaptchaDemo()">Try Demo</button>
-  <button onclick="showFreeKeyModal()">Get Free API Key</button>
-</header>
-
-<main>
-  <div id="captcha-demo" style="display:none;">
-    <h2>Live CAPTCHA Demo</h2>
-    <img id="captcha-img" src="/captcha" alt="CAPTCHA">
-    <a href="#" onclick="refreshCaptcha(event)">🔄 Refresh CAPTCHA</a>
-    <input type="text" id="captcha-input" placeholder="Enter CAPTCHA">
-    <button onclick="verifyCaptcha()">Verify</button>
-    <p id="captcha-message">{{ message|default('') }}</p>
-  </div>
-
-  <!-- Free API Key Modal -->
-  <div id="free-key-modal" class="modal">
-    <div class="modal-content">
-      <span class="close" onclick="closeFreeKeyModal()">&times;</span>
-      <h2>Get Free API Key</h2>
-      <input type="email" id="email-input" placeholder="Enter your email">
-      <button onclick="generateApiKey()">Generate Key</button>
-      <p id="api-key-display"></p>
-    </div>
-  </div>
-
-</main>
-
-<footer>
-  © 2025 QuickCaptcha • <a href="https://github.com/your/repo" target="_blank">GitHub Source</a>
-</footer>
-
+<div class="captcha-box">
+<h1>QuickCaptcha</h1>
+<form method="POST" action="/verify">
+<img src="/captcha" alt="CAPTCHA" id="captcha-image">
+<a href="#" class="refresh" onclick="refreshCaptcha(event)">🔄 Refresh CAPTCHA</a>
+<input type="text" name="captcha" placeholder="Enter CAPTCHA" required>
+<button type="submit">Verify</button>
+</form>
+{% if message %}
+<p style="color:{{color}}">{{ message }}</p>
+{% endif %}
+</div>
+<button id="tryFreeBtn">Try it Free</button>
+<div id="signupModal" class="modal">
+<div class="modal-content">
+<span class="close">&times;</span>
+<h2>Get Your Free QuickCaptcha API Key</h2>
+<input type="email" id="emailInput" placeholder="Enter your email" required>
+<button id="getKeyBtn">Generate Free Key</button>
+<p id="apiKeyDisplay"></p>
+<button id="copyKeyBtn">Copy Key</button>
+</div>
+</div>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
