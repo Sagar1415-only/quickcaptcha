@@ -110,49 +110,59 @@ def generate_key():
 @app.route("/generate-pro-key", methods=["POST"])
 def generate_pro_key():
     if not session.get("dashboard_access"):
-        return jsonify({"error":"Unauthorized"}), 403
-    data = request.json
-    email = data.get("email")
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
     limit = int(data.get("limit", 1000))
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    # Generate key
     key = str(uuid.uuid4())
-    pro_api_keys[key] = {"email": email, "count": 0, "limit": limit, "paid": True}
+    pro_api_keys[key] = {"email": email, "count": 0, "limit": limit, "paid": True, "emailed": False}
 
-    # Send Pro-specific email
+    # Send email
     if send_email(email, "Your QuickCaptcha Pro API Key",
-        f"Hello {email},\n\nYour Pro API key is:\n\n{key}\n\nLimit: {limit} requests/month.\n\n🎯 Features: Custom styling, higher limits, priority support.\n\nThank you for choosing QuickCaptcha!"):
-        print(f"✅ Pro key email sent to {email}")
+        f"Hello {email},\n\nYour Pro API key is:\n\n{key}\nLimit: {limit} requests/month.\n\nThank you!"):
+        pro_api_keys[key]["emailed"] = True
 
+    print(f"[ADMIN LOG] Pro key generated for {email}")
     return jsonify({"api_key": key, "limit": limit})
+
 
 # ---------------- PRO REQUEST ----------------
 @app.route("/request-pro-api", methods=["POST"])
 def request_pro_api():
-    data = request.json
-    email = data.get("email")
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
     limit = int(data.get("limit", 1000))
-    if not email:
-        return jsonify({"error":"Email required"}),400
 
-    # Send greeting email to user
-    send_email(email, "Welcome to QuickCaptcha Pro!",
-        f"Hello {email},\n\nThank you for choosing QuickCaptcha Pro!\nPlease reply with your requirements.\nContact: {ADMIN_EMAIL}\n\nLimit requested: {limit}")
-    print(f"[ADMIN LOG] Pro request email sent to: {email}")
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    # Notify user
+    send_email(email, "QuickCaptcha Pro Request Received",
+        f"Hello {email},\n\nThank you for your interest in QuickCaptcha Pro.\nWe will review your request and contact you soon.\nRequested limit: {limit}")
 
     # Notify admin
     send_email(ADMIN_EMAIL, "New Pro API Request",
-        f"User {email} requested Pro API.\nLimit: {limit}\nTime: {datetime.now()}")
-print(f"[ADMIN LOG] Admin notified for Pro request by: {email}")
-    return jsonify({"status":"ok"})
+        f"User {email} requested Pro API access.\nLimit: {limit}\nTime: {datetime.now()}")
+
+    print(f"[ADMIN LOG] Admin notified for Pro request by {email}")
+    return jsonify({"status": "ok"})
 
 # ---------------- VERIFY CAPTCHA INPUT ----------------
 # ---------------- VERIFY CAPTCHA ----------------
+# ---------------- VERIFY CAPTCHA ----------------
 @app.route("/verify-captcha", methods=["POST"])
 def verify_captcha():
-    data = request.get_json()
-    user_input = data.get("user_input", "").strip().upper()
+    data = request.get_json() or {}
+    user_input = (data.get("user_input") or "").strip().upper()
     correct = session.get("captcha", "")
     captcha_time = session.get("captcha_time")
-    from datetime import timedelta
+    from datetime import timedelta, datetime
 
     # Check expiry
     if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
@@ -164,9 +174,10 @@ def verify_captcha():
     if attempts > 5:
         return jsonify({"success": False, "message": "Too many attempts. Refresh CAPTCHA."})
 
+    # Verify
     success = user_input == correct
 
-    # Clear after success
+    # Clear session after success
     if success:
         session.pop("captcha", None)
         session.pop("captcha_time", None)
@@ -175,7 +186,8 @@ def verify_captcha():
     # Logging
     print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Success: {success}")
 
-    return jsonify({"success": success})
+    return jsonify({"success": success, "message": "Verified" if success else "Incorrect captcha"})
+
 
 
 # ---------------- API VERIFY ----------------
