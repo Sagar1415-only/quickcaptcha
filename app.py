@@ -40,7 +40,7 @@ def send_email(to_email, subject, body):
         print("❌ Email exception:", e)
         return False
 
-# ---------------- CAPTCHA GENERATION ----------------
+# ---------------- CAPTCHA ----------------
 @app.route("/captcha")
 def captcha():
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
@@ -69,12 +69,9 @@ def verify_captcha():
     if not correct:
         return jsonify({"success": False, "message": "Captcha not found. Refresh to try again."})
 
-    if captcha_time_str:
-        try:
-            captcha_time = datetime.fromisoformat(captcha_time_str)
-        except:
-            captcha_time = datetime.now()
-    else:
+    try:
+        captcha_time = datetime.fromisoformat(captcha_time_str)
+    except:
         captcha_time = datetime.now()
 
     if datetime.now(timezone.utc).replace(tzinfo=None) - captcha_time > timedelta(minutes=5):
@@ -92,18 +89,13 @@ def verify_captcha():
         session.pop("captcha_attempts", None)
 
     print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Correct: {correct} | Success: {success}")
+    return jsonify({"success": success, "message": "Verified successfully!" if success else "Incorrect captcha. Try again!"})
 
-    return jsonify({
-        "success": success,
-        "message": "Verified successfully!" if success else "Incorrect captcha. Try again!"
-    })
-
-# ---------------- FREE API KEY ----------------
+# ---------------- FREE API ----------------
 @app.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
     email = (request.json.get("email") or "").strip().lower()
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+    if not email: return jsonify({"error": "Email required"}), 400
 
     for key, val in api_keys.items():
         if val["email"] == email:
@@ -114,25 +106,21 @@ def generate_free_key():
 
     send_email(email, "🎉 Your QuickCaptcha Free API Key",
                f"Hello {email},\n\nHere is your free API key:\n\n{key}\nLimit: {FREE_LIMIT} requests.\n\nEnjoy using QuickCaptcha!")
-
     send_email(ADMIN_EMAIL, "🆕 New Free API Registration",
                f"User: {email}\nKey: {key}\nTime: {datetime.now()}")
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
-# ---------------- PRO REQUEST ----------------
+# ---------------- PRO API ----------------
 @app.route("/request-pro-api", methods=["POST"])
 def request_pro_api():
     data = request.json or {}
     email = (data.get("email") or "").strip().lower()
     limit = int(data.get("limit", 1000))
-
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+    if not email: return jsonify({"error": "Email required"}), 400
 
     send_email(email, "💼 QuickCaptcha Pro Request Received",
                f"Hello {email},\n\nThank you for your interest in QuickCaptcha Pro.\nPlease reply with your specific requirements.\nRequested limit: {limit}\n\nContact: {ADMIN_EMAIL}")
-
     send_email(ADMIN_EMAIL, "📩 New Pro API Request",
                f"User {email} requested Pro API access.\nLimit: {limit}\nTime: {datetime.now()}")
 
@@ -140,21 +128,18 @@ def request_pro_api():
     return jsonify({"status": "ok"})
 
 # ---------------- DASHBOARD ----------------
-@app.route("/dashboard", methods=["GET", "POST"])
+@app.route("/dashboard", methods=["GET","POST"])
 def dashboard():
     if request.method == "POST":
-        pwd = request.form.get("password")
-        if pwd == DASHBOARD_PASSWORD:
+        if request.form.get("password") == DASHBOARD_PASSWORD:
             session["dashboard_access"] = True
             return redirect(url_for("dashboard"))
         return "❌ Wrong password", 403
-
     if not session.get("dashboard_access"):
         return """<form method='POST' style='margin-top:100px;text-align:center;'>
                     <input type='password' name='password' placeholder='Enter password'>
                     <button type='submit'>Login</button>
                   </form>"""
-
     return render_template_string(DASHBOARD_HTML, api_keys=api_keys, free_limit=FREE_LIMIT)
 
 @app.route("/logout")
@@ -172,16 +157,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <title>QuickCaptcha</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 <style>
-body { font-family:'Poppins',sans-serif; background: linear-gradient(135deg,#f8faff,#eef2f3); text-align:center; padding:40px;}
-.container { display:flex; justify-content:center; gap:40px; flex-wrap:wrap;}
-.card { background:white; padding:25px; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.1); width:300px;}
-.captcha-verify { margin-top:15px;}
-.captcha-verify input { padding:8px; border-radius:6px; border:1px solid #ccc;}
-.captcha-verify button { padding:8px 12px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer;}
-button:hover { background:#0056b3;}
-.modal { display:none; position:fixed; z-index:999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.4);}
-.modal-content { background:white; border-radius:10px; padding:20px; width:90%; max-width:400px; margin:10% auto; text-align:center;}
+body{font-family:'Poppins',sans-serif;background:#eef2f3;text-align:center;padding:40px;margin:0;}
+h1{color:#007bff;}
+.container{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;}
+.card{background:white;padding:25px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:300px;}
+.captcha-verify{margin-top:15px;display:flex;justify-content:center;gap:10px;}
+.captcha-verify input{padding:8px;border-radius:6px;border:1px solid #ccc;width:120px;}
+.captcha-verify button{padding:8px 12px;background:#007bff;color:white;border:none;border-radius:6px;cursor:pointer;}
+.captcha-verify button:hover{background:#0056b3;}
+button:hover{opacity:0.9;}
+.modal{display:none;position:fixed;z-index:999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.4);}
+.modal-content{background:white;border-radius:10px;padding:20px;width:90%;max-width:400px;margin:10% auto;text-align:center;}
+.modal-content input{padding:8px;margin:8px 0;width:80%;border-radius:6px;border:1px solid #ccc;}
+.modal-content button{padding:8px 12px;margin-top:5px;background:#007bff;color:white;border:none;border-radius:6px;cursor:pointer;}
+.modal-content button:hover{background:#0056b3;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th,td{border:1px solid #ddd;padding:8px;}
+th{background:#007bff;color:white;}
+tr:nth-child(even){background:#f2f2f2;}
 </style>
 </head>
 <body>
@@ -194,18 +189,17 @@ button:hover { background:#0056b3;}
     <h2>Free Plan</h2>
     <p>For testing & small-scale apps</p>
     <img id="captcha-image" src="/captcha" alt="Captcha" style="width:240px;border:1px solid #ddd;border-radius:8px;">
-     <div class="captcha-verify">
-       <input type="text" id="captchaInput" placeholder="Enter Captcha">
-       <button onclick="verifyCaptcha()">Verify</button>
-       <button onclick="refreshCaptcha()">🔄 Refresh Captcha</button>
-     </div>
+    <div class="captcha-verify">
+      <input type="text" id="captchaInput" placeholder="Enter Captcha">
+      <button onclick="verifyCaptcha()">Verify</button>
+      <button onclick="refreshCaptcha()">🔄 Refresh</button>
+    </div>
     <br>
     <button id="tryFreeBtn">Generate Free Key</button>
-    <button id="getProBtn">View Pro Plans</button>
   </div>
 </div>
 
-<!-- Free API Key Modal -->
+<!-- Free Modal -->
 <div id="signupModal" class="modal">
   <div class="modal-content">
     <h2>Get Your Free API Key</h2>
@@ -220,7 +214,7 @@ button:hover { background:#0056b3;}
 <div id="proModal" class="modal">
   <div class="modal-content">
     <h2>Pro Packages</h2>
-    <table border="1" style="width:100%;border-collapse:collapse;">
+    <table>
       <tr><th>Plan</th><th>Limit</th><th>Price</th></tr>
       <tr><td>Starter</td><td>1,000/mo</td><td>₹199 / $3</td></tr>
       <tr><td>Growth</td><td>5,000/mo</td><td>₹599 / $8</td></tr>
@@ -235,64 +229,61 @@ button:hover { background:#0056b3;}
 
 <script>
 function refreshCaptcha(){
-    document.getElementById("captcha-image").src = "/captcha?" + new Date().getTime();
+  document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();
 }
+
 async function verifyCaptcha(){
   const input=document.getElementById("captchaInput").value.trim();
   if(!input){alert("Enter captcha");return;}
   const res=await fetch("/verify-captcha",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_input:input})});
   const data=await res.json();
-  alert(data.message);
+  if(data.success){alert("✅ Verified Successfully");}
+  else{alert("❌ "+data.message);refreshCaptcha();}
 }
 
-// Modals
-document.getElementById("tryFreeBtn").onclick=()=>{document.getElementById("signupModal").style.display="block"; document.getElementById("apiKeyDisplay").textContent=""; document.getElementById("copyApiBtn").style.display="none";}
-document.getElementById("getProBtn").onclick=()=>{document.getElementById("proModal").style.display="block"; document.getElementById("proRequestStatus").textContent="";}
-
-// Free API Key
+// Free API modal
+document.getElementById("tryFreeBtn").onclick=()=>{document.getElementById("signupModal").style.display="block";document.getElementById("apiKeyDisplay").textContent="";document.getElementById("copyApiBtn").style.display="none";}
 document.getElementById("getKeyBtn").onclick=async()=>{
   const email=document.getElementById("emailInput").value.trim();
   const apiKeyDisplay=document.getElementById("apiKeyDisplay");
   const copyApiBtn=document.getElementById("copyApiBtn");
-  if(!email){alert("Enter your email!"); return;}
+  if(!email){alert("Enter your email");return;}
   const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
   const data=await res.json();
-  if(data.api_key){apiKeyDisplay.textContent="✅ "+data.api_key; copyApiBtn.style.display="inline-block";} 
-  else{apiKeyDisplay.textContent="❌ "+(data.error||"Error"); copyApiBtn.style.display="none";}
-};
+  if(data.api_key){apiKeyDisplay.textContent="✅ "+data.api_key;copyApiBtn.style.display="inline-block";}
+  else{apiKeyDisplay.textContent="❌ "+(data.error||"Error");copyApiBtn.style.display="none";}
+}
+document.getElementById("copyApiBtn").onclick=async()=>{
+  const text=document.getElementById("apiKeyDisplay").textContent.replace("✅ ","").trim();
+  if(!text||text.startsWith("❌")){alert("No valid API key");return;}
+  try{await navigator.clipboard.writeText(text);alert("✅ Copied!");}catch{alert("⚠️ Clipboard denied!");}
+}
 
-// Copy Free API key
-document.getElementById("copyApiBtn").addEventListener("click", async()=>{const text=document.getElementById("apiKeyDisplay").textContent.replace("✅ ","").trim(); if(!text || text.startsWith("❌")){alert("No valid API key");return;} try{await navigator.clipboard.writeText(text);alert("✅ Copied!");}catch(e){alert("❌ Clipboard error");}});
-
-// Pro API request
+// Pro API modal
 document.getElementById("requestProBtn").onclick=async()=>{
   const email=document.getElementById("proEmail").value.trim();
   const limit=parseInt(document.getElementById("proLimit").value)||1000;
   const statusEl=document.getElementById("proRequestStatus");
-  if(!email){alert("Enter email!"); return;}
+  if(!email){alert("Enter your email");return;}
   const res=await fetch("/request-pro-api",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
   const data=await res.json();
-  statusEl.textContent=(data.status==="ok")?"✅ Request Sent!":"❌ "+(data.error||"Error");
-};
+  if(data.status==="ok")statusEl.textContent="✅ Request Sent!";else statusEl.textContent="❌ "+(data.error||"Error");
+}
 
 // Close modals
-window.onclick=(e)=>{if(e.target==document.getElementById("signupModal")) document.getElementById("signupModal").style.display="none"; if(e.target==document.getElementById("proModal")) document.getElementById("proModal").style.display="none";}
+window.onclick=(event)=>{if(event.target==document.getElementById("signupModal"))document.getElementById("signupModal").style.display="none";if(event.target==document.getElementById("proModal"))document.getElementById("proModal").style.display="none";}
 </script>
-
-</body>
-</html>
+</body></html>
 """
 
 DASHBOARD_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Dashboard</title>
+<html lang="en"><head><meta charset="UTF-8"><title>Dashboard</title>
 <style>
 body{background:#f6f7fb;font-family:Poppins,sans-serif;text-align:center;}
 table{margin:auto;border-collapse:collapse;width:80%;}
 th,td{border:1px solid #ddd;padding:8px;}th{background:#007bff;color:#fff;}
 tr:nth-child(even){background:#f2f2f2;}
-</style></head>
-<body>
+</style></head><body>
 <h2>QuickCaptcha Dashboard</h2>
 <table><tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
 {% for k,v in api_keys.items() %}
