@@ -194,10 +194,11 @@ button:hover { background:#0056b3;}
     <h2>Free Plan</h2>
     <p>For testing & small-scale apps</p>
     <img id="captcha-image" src="/captcha" alt="Captcha" style="width:240px;border:1px solid #ddd;border-radius:8px;">
-    <div class="captcha-verify">
-      <input type="text" id="captchaInput" placeholder="Enter Captcha">
-      <button onclick="verifyCaptcha()">Verify</button>
-    </div>
+     <div class="captcha-verify">
+       <input type="text" id="captchaInput" placeholder="Enter Captcha">
+       <button onclick="verifyCaptcha()">Verify</button>
+       <button onclick="refreshCaptcha()">🔄 Refresh Captcha</button>
+     </div>
     <br>
     <button id="tryFreeBtn">Generate Free Key</button>
     <button id="getProBtn">View Pro Plans</button>
@@ -233,7 +234,9 @@ button:hover { background:#0056b3;}
 </div>
 
 <script>
-function refreshCaptcha(){document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
+function refreshCaptcha(){
+    document.getElementById("captcha-image").src = "/captcha?" + new Date().getTime();
+}
 async function verifyCaptcha(){
   const input=document.getElementById("captchaInput").value.trim();
   if(!input){alert("Enter captcha");return;}
