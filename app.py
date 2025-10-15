@@ -58,7 +58,7 @@ def captcha():
 # ---------------- ROOT ----------------
 @app.route("/")
 def home():
-    return render_template_string(HTML_TEMPLATE, message="")
+    return render_template_string(HTML_TEMPLATE)
 
 # ---------------- VERIFY CAPTCHA ----------------
 @app.route("/verify-captcha", methods=["POST"])
@@ -67,7 +67,6 @@ def verify_captcha():
     user_input = (data.get("user_input") or "").strip().upper()
     correct = session.get("captcha", "")
     captcha_time_str = session.get("captcha_time")
-    message = ""
 
     if not correct:
         return jsonify({"success": False, "message": "Captcha not found. Refresh to try again."})
@@ -162,12 +161,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 body{font-family:'Poppins',sans-serif;background:#eef2f3;text-align:center;padding:40px;margin:0;}
 h1{color:#007bff;margin-bottom:10px;}
 .container{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;}
-.card{background:white;padding:25px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:320px;}
+.card{background:white;padding:25px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.1);width:340px;}
 .captcha-verify{margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}
 .captcha-verify input{padding:8px;border-radius:6px;border:1px solid #ccc;width:120px;}
 .captcha-verify button{padding:8px 12px;background:#007bff;color:white;border:none;border-radius:6px;cursor:pointer;}
 .captcha-verify button:hover{background:#0056b3;}
 #message{margin-top:10px;font-weight:600;}
+input[type=email], input[type=number]{padding:8px;width:80%;margin-bottom:5px;border-radius:6px;border:1px solid #ccc;}
 button:hover{opacity:0.9;}
 </style>
 </head>
@@ -179,7 +179,6 @@ button:hover{opacity:0.9;}
 <div class="container">
   <div class="card">
     <h2>Free Plan</h2>
-    <p>For testing & small-scale apps</p>
     <img id="captcha-image" src="/captcha" alt="Captcha" style="width:240px;border:1px solid #ddd;border-radius:8px;">
     <div class="captcha-verify">
       <input type="text" id="captchaInput" placeholder="Enter Captcha">
@@ -188,16 +187,27 @@ button:hover{opacity:0.9;}
     </div>
     <div id="message"></div>
     <br>
-    <input type="email" id="emailInput" placeholder="Enter your email" style="padding:8px;width:80%;margin-bottom:5px;">
+    <input type="email" id="emailInput" placeholder="Enter your email">
     <button onclick="generateFreeKey()">Generate Free API Key</button>
+    <button id="copyApiBtn" style="display:none;" onclick="copyApiKey()">📋 Copy Key</button>
     <p id="apiKeyDisplay"></p>
+    <hr>
+    <h2>Pro Plan</h2>
+    <table border="1" style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+      <tr><th>Plan</th><th>Limit</th><th>Price</th></tr>
+      <tr><td>Starter</td><td>1,000/mo</td><td>₹199 / $3</td></tr>
+      <tr><td>Growth</td><td>5,000/mo</td><td>₹599 / $8</td></tr>
+      <tr><td>Business</td><td>20,000+/mo</td><td>₹1499 / $18</td></tr>
+    </table>
+    <input type="email" id="proEmail" placeholder="Your Email">
+    <input type="number" id="proLimit" placeholder="Limit (e.g. 5000)">
+    <button onclick="requestPro()">Request Pro Access</button>
+    <p id="proRequestStatus"></p>
   </div>
 </div>
 
 <script>
-function refreshCaptcha(){
-  document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();
-}
+function refreshCaptcha(){document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
 async function verifyCaptcha(){
   const input=document.getElementById("captchaInput").value.trim();
   if(!input){document.getElementById("message").textContent="Enter captcha!";return;}
@@ -208,11 +218,26 @@ async function verifyCaptcha(){
 }
 async function generateFreeKey(){
   const email=document.getElementById("emailInput").value.trim();
-  if(!email){document.getElementById("apiKeyDisplay").textContent="Enter email!";return;}
+  const apiDisplay=document.getElementById("apiKeyDisplay");
+  const copyBtn=document.getElementById("copyApiBtn");
+  if(!email){apiDisplay.textContent="Enter email!";return;}
   const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
   const data=await res.json();
-  if(data.api_key){document.getElementById("apiKeyDisplay").textContent="✅ Your API Key: "+data.api_key;}
-  else{document.getElementById("apiKeyDisplay").textContent="❌ "+(data.error||"Error");}
+  if(data.api_key){apiDisplay.textContent="✅ "+data.api_key; copyBtn.style.display="inline-block";} 
+  else{apiDisplay.textContent="❌ "+(data.error||"Error"); copyBtn.style.display="none";}
+}
+async function requestPro(){
+  const email=document.getElementById("proEmail").value.trim();
+  const limit=parseInt(document.getElementById("proLimit").value)||1000;
+  const statusEl=document.getElementById("proRequestStatus");
+  if(!email){statusEl.textContent="Enter email!"; return;}
+  const res=await fetch("/request-pro-api",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
+  const data=await res.json();
+  if(data.status==="ok"){statusEl.textContent="✅ Request Sent!";}else{statusEl.textContent="❌ "+(data.error||"Error");}
+}
+function copyApiKey(){
+  const text=document.getElementById("apiKeyDisplay").textContent.replace("✅ ","").trim();
+  if(!text.startsWith("❌")){navigator.clipboard.writeText(text).then(()=>alert("Copied!"));}else{alert("No key to copy!");}
 }
 </script>
 </body>
