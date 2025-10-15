@@ -2,6 +2,20 @@ from flask import Flask, request, jsonify, render_template_string, send_file, re
 import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
 from datetime import datetime, timedelta, timezone
+def reset_monthly_limits():
+    now = datetime.now()
+    for key, val in api_keys.items():
+        try:
+            last_reset = datetime.fromisoformat(val.get("last_reset", now.isoformat()))
+        except:
+            last_reset = now
+
+        # If a month has passed since last reset
+        if (now.year, now.month) != (last_reset.year, last_reset.month):
+            val["count"] = 0
+            val["last_reset"] = now.isoformat()
+            print(f"[RESET] Free API key {key} reset for new month.")
+
 
 # ---------------- CONFIG ----------------
 app = Flask(__name__)
@@ -101,6 +115,7 @@ def verify_captcha():
     })
 
 # ---------------- FREE API KEY ----------------
+reset_monthly_limits()  # <-- Add this line here
 @app.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
     email = (request.json.get("email") or "").strip().lower()
@@ -112,7 +127,9 @@ def generate_free_key():
             return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
     key = str(uuid.uuid4())
-    api_keys[key] = {"email": email, "count": 0, "emailed": False}
+    reset_monthly_limits()
+    api_keys[key] = {"email": email, "count": 0, "emailed": False,"last_reset": datetime.now().isoformat()
+                    }
 
     send_email(email, "🎉 Your QuickCaptcha Free API Key",
                f"Hello {email},\n\nHere is your free API key:\n\n{key}\nLimit: {FREE_LIMIT} requests.\n\nEnjoy using QuickCaptcha!")
@@ -144,6 +161,7 @@ def request_pro_api():
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
+    reset_monthly_limits()
     if request.method == "POST":
         pwd = request.form.get("password")
         if pwd == DASHBOARD_PASSWORD:
