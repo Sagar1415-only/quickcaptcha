@@ -1,6 +1,17 @@
-import os, random, string, io, uuid, requests
-from captcha.image import ImageCaptcha
-from datetime import datetime, timedelta, timezone
+import os
+import uuid
+from datetime import datetime
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
+
+# ---------------- CONFIG ----------------
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
+
+FREE_LIMIT = 50
+DASHBOARD_PASSWORD = "admin123"
+api_keys = {}  # Store API keys
+
+# ---------------- FUNCTIONS ----------------
 def reset_monthly_limits():
     now = datetime.now()
     for key, val in api_keys.items():
@@ -8,99 +19,58 @@ def reset_monthly_limits():
             last_reset = datetime.fromisoformat(val.get("last_reset", now.isoformat()))
         except:
             last_reset = now
-
-        # If a month has passed since last reset
         if (now.year, now.month) != (last_reset.year, last_reset.month):
             val["count"] = 0
             val["last_reset"] = now.isoformat()
             print(f"[RESET] Free API key {key} reset for new month.")
 
-
-# ---------------- CONFIG ----------------
-app = Flask(__name__)
-@@ -101,6 +115,7 @@
-})
-
-# ---------------- FREE API KEY ----------------
-reset_monthly_limits()  # <-- Add this line here
+# ---------------- ROUTES ----------------
 @app.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
-email = (request.json.get("email") or "").strip().lower()
-@@ -112,7 +127,9 @@
-return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
-
-key = str(uuid.uuid4())
-    api_keys[key] = {"email": email, "count": 0, "emailed": False}
+    email = (request.json.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+    key = str(uuid.uuid4())
+    api_keys[key] = {"email": email, "count": 0, "emailed": False, "last_reset": datetime.now().isoformat()}
     reset_monthly_limits()
-    api_keys[key] = {"email": email, "count": 0, "emailed": False,"last_reset": datetime.now().isoformat()
-                    }
 
-send_email(
-    email,
-    "🎉 Your QuickCaptcha Free API Key",
-    f"""
-    Hello {email},
+    # Placeholder for sending email
+    print(f"[EMAIL] Sending free API key to {email}: {key}")
 
-Here is your free API key:
-{key}
+    return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
 
-Limit: {FREE_LIMIT} requests per month.
 
-Enjoy using QuickCaptcha!
-
----
-⚡ Need higher limits or business features?
-
-Upgrade to **QuickCaptcha Pro** — get more requests, faster delivery, premium support, and customizations.
-
-💡 We even have a very basic plan at **₹100/month** for minimal changes in background or logo — perfect if you want just small branding tweaks.
-
-Choose your preferred plan:
-
-• Starter — 1,000 requests — ₹199 / $3  
-• Growth — 5,000 requests — ₹599 / $8  
-• Business — 20,000+ requests — ₹1,499 / $18  
-• Enterprise — 20,000+ requests — Custom Plan (contact for best quote)
-
-📩 Contact us anytime: sagarms121415@gmail.com  
-
-To upgrade or get a custom plan:
-👉 Visit: https://quickcaptcha.onrender.com  
-
-— QuickCaptcha Team
-"""
-)
-
-@@ -144,319 +161,320 @@
-# ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     reset_monthly_limits()
-if request.method == "POST":
-pwd = request.form.get("password")
-if pwd == DASHBOARD_PASSWORD:
-session["dashboard_access"] = True
-return redirect(url_for("dashboard"))
-return "❌ Wrong password", 403
+    if request.method == "POST":
+        pwd = request.form.get("password")
+        if pwd == DASHBOARD_PASSWORD:
+            session["dashboard_access"] = True
+            return redirect(url_for("dashboard"))
+        return "❌ Wrong password", 403
 
-if not session.get("dashboard_access"):
-return """<form method='POST' style='margin-top:100px;text-align:center;'>
-                   <input type='password' name='password' placeholder='Enter password'>
-                   <button type='submit'>Login</button>
-                 </form>"""
+    if not session.get("dashboard_access"):
+        return """
+        <form method='POST' style='margin-top:100px;text-align:center;'>
+            <input type='password' name='password' placeholder='Enter password'>
+            <button type='submit'>Login</button>
+        </form>"""
 
-return render_template_string(DASHBOARD_HTML, api_keys=api_keys, free_limit=FREE_LIMIT)
+    return render_template_string(DASHBOARD_HTML, api_keys=api_keys, free_limit=FREE_LIMIT)
+
 
 @app.route("/logout")
 def logout():
-session.pop("dashboard_access", None)
-return redirect(url_for("dashboard"))
+    session.pop("dashboard_access", None)
+    return redirect(url_for("dashboard"))
+
 
 @app.route("/refresh-data")
 def refresh_data():
-return jsonify({"api_keys": api_keys})
+    return jsonify({"api_keys": api_keys})
 
-# ---------------- HTML TEMPLATE (UI changes only) ----------------
+# ---------------- HTML TEMPLATE ----------------
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -189,63 +159,83 @@ body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial
    </div>
 
    <!-- Pro Plan Card -->
- <div class="card pro-card">
-  <h2>Pro Plan</h2>
-  <p class="muted">For startups and businesses — higher limits, priority support, custom styling.</p>
+   <div class="card pro-card">
+     <h2>Pro Plan</h2>
+     <p class="muted">For startups and businesses — higher limits, priority support, custom styling.</p>
 
-  <!-- Pro Plans Table -->
-  <div class="table-wrap" style="margin-top:12px">
-    <table class="pro-table" aria-label="Pro Plans">
-      <thead>
-        <tr>
-          <th>Plan</th>
-          <th>Limit</th>
-          <th>Price</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Basic</td>
-          <td>Minimal customization (background/logo)</td>
-          <td>₹100 / $1.5</td>
-          <td><button class="btn selectProBtn" data-plan="Basic" data-price="100">Select</button></td>
-        </tr>
-        <tr>
-          <td>Starter</td>
-          <td>1,000 / month</td>
-          <td>₹199 / $3</td>
-          <td><button class="btn selectProBtn" data-plan="Starter" data-price="199">Select</button></td>
-        </tr>
-        <tr>
-          <td>Growth</td>
-          <td>5,000 / month</td>
-          <td>₹599 / $8</td>
-          <td><button class="btn selectProBtn" data-plan="Growth" data-price="599">Select</button></td>
-        </tr>
-        <tr>
-          <td>Business</td>
-          <td>20,000+ / month</td>
-          <td>₹1499 / $18</td>
-          <td><button class="btn selectProBtn" data-plan="Business" data-price="1499">Select</button></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+     <!-- Pro Plans Table -->
+     <div class="table-wrap" style="margin-top:12px">
+       <table class="pro-table" aria-label="Pro Plans">
+         <thead>
+           <tr>
+             <th>Plan</th>
+             <th>Limit</th>
+             <th>Price</th>
+             <th>Action</th>
+           </tr>
+         </thead>
+         <tbody>
+           <tr>
+             <td>Basic</td>
+             <td>Minimal customization (background/logo)</td>
+             <td>₹100 / $1.5</td>
+             <td><button class="btn selectProBtn" data-plan="Basic" data-price="100">Select</button></td>
+           </tr>
+           <tr>
+             <td>Starter</td>
+             <td>1,000 / month</td>
+             <td>₹199 / $3</td>
+             <td><button class="btn selectProBtn" data-plan="Starter" data-price="199">Select</button></td>
+           </tr>
+           <tr>
+             <td>Growth</td>
+             <td>5,000 / month</td>
+             <td>₹599 / $8</td>
+             <td><button class="btn selectProBtn" data-plan="Growth" data-price="599">Select</button></td>
+           </tr>
+           <tr>
+             <td>Business</td>
+             <td>20,000+ / month</td>
+             <td>₹1499 / $18</td>
+             <td><button class="btn selectProBtn" data-plan="Business" data-price="1499">Select</button></td>
+           </tr>
+         </tbody>
+       </table>
+     </div>
 
-  <!-- Request Form + Description + Payment -->
-  <div style="margin-top:16px">
-    <div class="label">Your Email</div>
-    <input id="proEmail" class="form-input" placeholder="Your business email">
-    
-    <div class="label" style="margin-top:8px;">Describe your requirements</div>
-    <textarea id="proDescription" class="form-input" placeholder="Describe what you need..." rows="4"></textarea>
-    
-    <div class="pro-cta" style="margin-top:8px;">
-      <button id="proPayBtn" class="btn" disabled>Pay 50% & Submit Request</button>
-      <div id="proStatus" class="small" aria-live="polite"></div>
-    </div>
-    let selectedPlan = null;
+     <!-- Request Form + Description + Payment -->
+     <div style="margin-top:16px">
+       <div class="label">Your Email</div>
+       <input id="proEmail" class="form-input" placeholder="Your business email">
+       
+       <div class="label" style="margin-top:8px;">Describe your requirements</div>
+       <textarea id="proDescription" class="form-input" placeholder="Describe what you need..." rows="4"></textarea>
+       
+       <div class="pro-cta" style="margin-top:8px;">
+         <button id="proPayBtn" class="btn" disabled>Pay 50% & Submit Request</button>
+         <div id="proStatus" class="small" aria-live="polite"></div>
+       </div>
+     </div>
+   </div>
+ </div>
+
+ <!-- Free API Key modal -->
+ <div id="freeModal" style="display:none;position:fixed;inset:0;background:rgba(10,12,20,0.6);align-items:center;justify-content:center;">
+   <div style="background:#fff;border-radius:10px;padding:20px;max-width:420px;margin:auto;box-shadow:0 8px 30px rgba(2,6,23,0.12);">
+     <h3 style="margin:0 0 8px">Get Your Free API Key</h3>
+     <p style="margin:0 0 12px;color:#6b7280;font-size:13px">Enter your email to receive a free API key (limit {{FREE_LIMIT}} requests).</p>
+     <input id="emailInput" type="email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #eef2f6;border-radius:8px;margin-bottom:10px">
+     <div style="display:flex;gap:8px">
+       <button id="getKeyBtnModal" class="btn" style="flex:1">Generate Key</button>
+       <button id="closeModalBtn" class="btn btn-ghost" style="flex:1">Close</button>
+     </div>
+     <p id="apiKeyDisplay" style="font-weight:600;margin-top:10px;word-break:break-all"></p>
+     <button id="copyApiBtn" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;border:0;background:#0f172a;color:#fff;cursor:pointer">📋 Copy API Key</button>
+   </div>
+ </div>
+
+<script>
+let selectedPlan = null;
 let selectedPrice = 0;
 
 // Plan selection buttons
@@ -289,26 +279,6 @@ document.getElementById("proPayBtn").addEventListener("click", async () => {
   }
 });
 
-  </div>
-</div>
-
-
-<!-- Free API Key modal (kept as before to avoid logic change) -->
-<div id="freeModal" style="display:none;position:fixed;inset:0;background:rgba(10,12,20,0.6);align-items:center;justify-content:center;">
- <div style="background:#fff;border-radius:10px;padding:20px;max-width:420px;margin:auto;box-shadow:0 8px 30px rgba(2,6,23,0.12);">
-   <h3 style="margin:0 0 8px">Get Your Free API Key</h3>
-   <p style="margin:0 0 12px;color:#6b7280;font-size:13px">Enter your email to receive a free API key (limit {{FREE_LIMIT}} requests).</p>
-   <input id="emailInput" type="email" placeholder="your@email.com" style="width:100%;padding:10px;border:1px solid #eef2f6;border-radius:8px;margin-bottom:10px">
-   <div style="display:flex;gap:8px">
-     <button id="getKeyBtnModal" class="btn" style="flex:1">Generate Key</button>
-     <button id="closeModalBtn" class="btn btn-ghost" style="flex:1">Close</button>
-   </div>
-   <p id="apiKeyDisplay" style="font-weight:600;margin-top:10px;word-break:break-all"></p>
-   <button id="copyApiBtn" style="display:none;margin-top:8px;padding:8px 12px;border-radius:8px;border:0;background:#0f172a;color:#fff;cursor:pointer">📋 Copy API Key</button>
- </div>
-</div>
-
-<script>
 // refresh captcha
 function refreshCaptcha(){
  const img = document.getElementById("captcha-image");
@@ -325,7 +295,7 @@ document.getElementById("verifyBtn").addEventListener("click", async () => {
  try {
    const res = await fetch("/verify-captcha", {
      method: "POST",
-     headers: {"Content-Type": "application/json"},
+     headers: {"Content-Type":"application/json"},
      body: JSON.stringify({user_input: input})
    });
    const data = await res.json();
@@ -343,7 +313,7 @@ document.getElementById("verifyBtn").addEventListener("click", async () => {
  }
 });
 
-// Free API modal handling (kept functionality)
+// Free API modal handling
 const freeModal = document.getElementById("freeModal");
 document.getElementById("openFreeModal").addEventListener("click", () => {
  freeModal.style.display = "flex";
@@ -352,7 +322,7 @@ document.getElementById("openFreeModal").addEventListener("click", () => {
 });
 document.getElementById("closeModalBtn").addEventListener("click", () => { freeModal.style.display = "none"; });
 
-// generate free key (modal)
+// generate free key
 document.getElementById("getKeyBtnModal").addEventListener("click", async () => {
  const email = (document.getElementById("emailInput").value || "").trim();
  const display = document.getElementById("apiKeyDisplay");
@@ -383,33 +353,6 @@ document.getElementById("copyApiBtn").addEventListener("click", async () => {
    alert("✅ API Key copied to clipboard!");
  } catch (e) {
    alert("⚠️ Clipboard access denied.");
- }
-});
-
-// Pro inline request
-document.getElementById("requestProBtnInline").addEventListener("click", async () => {
- const email = (document.getElementById("proEmail").value || "").trim();
- const limit = parseInt(document.getElementById("proLimit").value) || 1000;
- const statusEl = document.getElementById("proStatusInline");
- statusEl.textContent = "";
- if (!email) { statusEl.style.color = "var(--danger)"; statusEl.textContent = "Enter your email"; return; }
- try {
-   const res = await fetch("/request-pro-api", {
-     method: "POST",
-     headers: {"Content-Type": "application/json"},
-     body: JSON.stringify({email, limit})
-   });
-   const data = await res.json();
-   if (data.status === "ok") {
-     statusEl.style.color = "var(--success)";
-     statusEl.textContent = "✅ Request Sent! We'll contact you.";
-   } else {
-     statusEl.style.color = "var(--danger)";
-     statusEl.textContent = "❌ " + (data.error || "Request failed");
-   }
- } catch (err) {
-   statusEl.style.color = "var(--danger)";
-   statusEl.textContent = "❌ Error sending request";
  }
 });
 
@@ -445,4 +388,4 @@ a{color:#2563eb;text-decoration:none}
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
-app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
