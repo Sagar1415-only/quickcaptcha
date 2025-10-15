@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template_string, send_file, re
 import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
 from datetime import datetime, timedelta, timezone
+
 def reset_monthly_limits():
     now = datetime.now()
     for key, val in api_keys.items():
@@ -131,8 +132,68 @@ def generate_free_key():
     api_keys[key] = {"email": email, "count": 0, "emailed": False,"last_reset": datetime.now().isoformat()
                     }
 
-    send_email(email, "🎉 Your QuickCaptcha Free API Key",
-               f"Hello {email},\n\nHere is your free API key:\n\n{key}\nLimit: {FREE_LIMIT} requests.\n\nEnjoy using QuickCaptcha!")
+    send_email(
+        email,
+        "🎉 Your QuickCaptcha Free API Key",
+        f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f8faff; padding: 20px;">
+<div style="max-width: 600px; background: #fff; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin:auto;">
+<h2 style="color:#007bff;">🎉 Welcome to QuickCaptcha!</h2>
+<p>Hello <b>{email}</b>,</p>
+
+<p>Here is your <b>Free API Key</b>:</p>
+<div style="background:#f0f4ff; padding:12px; border-radius:8px; border:1px solid #cdd9ff; font-family:monospace; font-size:15px;">
+{key}
+</div>
+
+<p><b>Limit:</b> {FREE_LIMIT} requests per month</p>
+<p>Enjoy using <b>QuickCaptcha</b> for your project! 🚀</p>
+
+<hr style="margin: 20px 0; border:none; border-top:1px solid #eee;">
+
+<h3 style="color:#007bff;">💼 Upgrade to QuickCaptcha Pro</h3>
+<p>Need higher limits, logo customization, or faster verification? Choose the best plan for your needs:</p>
+
+<table style="width:100%; border-collapse:collapse; text-align:left;">
+<tr style="background:#f2f6ff;">
+<th style="padding:8px; border:1px solid #ddd;">Plan</th>
+<th style="padding:8px; border:1px solid #ddd;">Limit</th>
+<th style="padding:8px; border:1px solid #ddd;">Price</th>
+</tr>
+<tr><td style="padding:8px;">Mini</td><td style="padding:8px;">500 req/mo</td><td style="padding:8px;">₹100 / $1.5</td></tr>
+<tr><td style="padding:8px;">Starter</td><td style="padding:8px;">1,000 req/mo</td><td style="padding:8px;">₹199 / $3</td></tr>
+<tr><td style="padding:8px;">Growth</td><td style="padding:8px;">5,000 req/mo</td><td style="padding:8px;">₹499 / $6</td></tr>
+<tr><td style="padding:8px;">Advanced</td><td style="padding:8px;">10,000 req/mo</td><td style="padding:8px;">₹899 / $11</td></tr>
+<tr><td style="padding:8px;">Business</td><td style="padding:8px;">20,000 req/mo</td><td style="padding:8px;">₹1,499 / $18</td></tr>
+<tr><td style="padding:8px;">Enterprise</td><td style="padding:8px;">20,000+ req/mo</td><td style="padding:8px;">Custom Quote</td></tr>
+</table>
+
+<p style="margin-top:10px;">💡 <i>Bigger plans = lower cost per request — best value for scaling users!</i></p>
+
+<div style="margin-top:20px; text-align:center;">
+<a href="https://quickcaptcha.onrender.com"
+   style="background:#007bff; color:white; padding:12px 25px; text-decoration:none; border-radius:8px; display:inline-block;">
+💼 Explore Pro Plans
+</a>
+&nbsp;&nbsp;
+<a href="mailto:{ADMIN_EMAIL}?subject=Upgrade to QuickCaptcha Pro&body=Hi, I’d like to upgrade my plan. My email: {email}"
+   style="background:#22c55e; color:white; padding:12px 25px; text-decoration:none; border-radius:8px; display:inline-block;">
+📩 Contact Admin
+</a>
+</div>
+
+<p style="margin-top:20px; font-size:13px; color:#777;">
+🔹 <b>Mini Plan (₹100)</b>: Includes basic logo customization and UI color tweaks.<br>
+🔹 Perfect for hobby projects & startup prototypes.
+</p>
+
+<p style="margin-top:15px; font-size:13px; color:#777;">— The QuickCaptcha Team</p>
+</div>
+</body>
+</html>
+"""
+    )
 
     send_email(ADMIN_EMAIL, "🆕 New Free API Registration",
                f"User: {email}\nKey: {key}\nTime: {datetime.now()}")
@@ -149,14 +210,37 @@ def request_pro_api():
     if not email:
         return jsonify({"error": "Email required"}), 400
 
-    send_email(email, "💼 QuickCaptcha Pro Request Received",
-               f"Hello {email},\n\nThank you for your interest in QuickCaptcha Pro.\nPlease reply with your specific requirements.\nRequested limit: {limit}\n\nContact: {ADMIN_EMAIL}")
+    send_email(
+        email,
+        "💼 QuickCaptcha Pro Request Received",
+        f"<html><body>Pro request received for {email}, requested limit: {limit}</body></html>"
+    )
 
     send_email(ADMIN_EMAIL, "📩 New Pro API Request",
                f"User {email} requested Pro API access.\nLimit: {limit}\nTime: {datetime.now()}")
 
     print(f"[ADMIN LOG] Pro API request received from {email}")
     return jsonify({"status": "ok"})
+
+@app.route("/payment-confirmation", methods=["POST"])
+def payment_confirmation():
+    data = request.get_json() or {}
+    email = data.get("email", "")
+    plan = data.get("plan", "")
+    amount = data.get("amount", "")
+    
+    if not email or not plan:
+        return jsonify({"success": False, "message": "Missing details."})
+
+    # Send admin notification
+    send_email(
+        ADMIN_EMAIL,
+        "💰 QuickCaptcha Pro – Payment Confirmed (50%)",
+        f"User {email} has confirmed 50% payment for plan: {plan}.\nAmount: {amount}\nTime: {datetime.now()}"
+    )
+    print(f"[ADMIN LOG] 50% payment confirmed by {email} for {plan}")
+    
+    return jsonify({"success": True, "message": "Payment confirmation received. Admin will contact you shortly."})
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -186,7 +270,8 @@ def logout():
 def refresh_data():
     return jsonify({"api_keys": api_keys})
 
-# ---------------- HTML TEMPLATE (UI changes only) ----------------
+# ---------------- HTML TEMPLATE & DASHBOARD_HTML ----------------
+# (Kept exactly as in your code, no changes here)
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -478,3 +563,4 @@ a{color:#2563eb;text-decoration:none}
 # ---------------- RUN ----------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
