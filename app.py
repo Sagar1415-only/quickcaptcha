@@ -5,6 +5,9 @@ from datetime import datetime, timedelta
 
 # ---------------- CONFIG ----------------
 app = Flask(__name__)
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_TYPE"] = "filesystem"  # ensures persistence across requests
 app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey123")
 FREE_LIMIT = 100
 ADMIN_EMAIL = "sagarms121415@gmail.com"
@@ -39,14 +42,17 @@ def send_email(to_email, subject, body):
 # ---------------- CAPTCHA GENERATION ----------------
 @app.route("/captcha")
 def captcha():
+    from datetime import datetime
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     session['captcha'] = text
-    session['captcha_time'] = datetime.now()
+    session['captcha_time'] = datetime.now().isoformat()  # store as string
+    session['captcha_attempts'] = 0  # reset
     image = ImageCaptcha()
     data = io.BytesIO()
     image.write(text, data)
     data.seek(0)
     return send_file(data, mimetype="image/png")
+
 
 # ---------------- ROOT ----------------
 @app.route("/")
@@ -56,30 +62,50 @@ def home():
 # ---------------- VERIFY CAPTCHA ----------------
 @app.route("/verify-captcha", methods=["POST"])
 def verify_captcha():
+    from datetime import datetime, timedelta
+
     data = request.get_json() or {}
     user_input = (data.get("user_input") or "").strip().upper()
     correct = session.get("captcha", "")
-    captcha_time = session.get("captcha_time")
+    captcha_time_str = session.get("captcha_time")
 
+    # if not generated
     if not correct:
-        return jsonify({"success": False, "message": "Captcha not generated. Please refresh."})
+        return jsonify({"success": False, "message": "Captcha not found. Refresh to try again."})
 
-    if captcha_time and datetime.now() - captcha_time > timedelta(minutes=5):
-        return jsonify({"success": False, "message": "CAPTCHA expired. Refresh to try again."})
+    # parse stored timestamp safely
+    if captcha_time_str:
+        try:
+            captcha_time = datetime.fromisoformat(captcha_time_str)
+        except:
+            captcha_time = datetime.now()
+    else:
+        captcha_time = datetime.now()
 
+    # expiry
+    if datetime.now() - captcha_time > timedelta(minutes=5):
+        return jsonify({"success": False, "message": "Captcha expired. Refresh to try again."})
+
+    # too many attempts
     attempts = session.get("captcha_attempts", 0) + 1
     session["captcha_attempts"] = attempts
     if attempts > 5:
-        return jsonify({"success": False, "message": "Too many attempts. Refresh CAPTCHA."})
+        return jsonify({"success": False, "message": "Too many attempts. Please refresh captcha."})
 
+    # check correctness
     success = user_input == correct
     if success:
         session.pop("captcha", None)
         session.pop("captcha_time", None)
         session.pop("captcha_attempts", None)
 
-    print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Success: {success}")
-    return jsonify({"success": success, "message": "Verified" if success else "Incorrect captcha"})
+    print(f"[CAPTCHA LOG] {datetime.now()} | IP: {request.remote_addr} | Input: {user_input} | Correct: {correct} | Success: {success}")
+
+    return jsonify({
+        "success": success,
+        "message": "Verified successfully!" if success else "Incorrect captcha. Try again!"
+    })
+
 
 # ---------------- FREE API KEY ----------------
 @app.route("/generate-free-key", methods=["POST"])
