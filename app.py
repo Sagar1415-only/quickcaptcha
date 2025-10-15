@@ -240,33 +240,25 @@ button:hover { background: #0056b3; }
     <h2>Free Plan</h2>
     <p>For testing & small-scale apps</p>
     <img id="captcha-image" src="/captcha" alt="Captcha" style="width:240px;border:1px solid #ddd;border-radius:8px;">
-    <div class="captcha-verify">
-      <input type="text" id="captchaInput" placeholder="Enter Captcha">
-      <button onclick="verifyCaptcha()">Verify</button>
-      <button id="copyBtn">📋 Copy Captcha</button>
-      <p id="captchaResult"></p>
-    </div>
-    <br>
-    <button id="tryFreeBtn">Generate Free Key</button>
-  </div>
-
-  <div class="card">
-    <h2>Pro Plan</h2>
-    <p>For startups & commercial use</p>
-    <button id="getProBtn">Explore Pro Plans</button>
-  </div>
+<div class="captcha-verify">
+  <input type="text" id="captchaInput" placeholder="Enter Captcha">
+  <button onclick="verifyCaptcha()">Verify</button>
 </div>
+<br>
+<button id="tryFreeBtn">Generate Free Key</button>
 
-<!-- Modals -->
+<!-- Free API Key Modal -->
 <div id="signupModal" class="modal">
   <div class="modal-content">
     <h2>Get Your Free API Key</h2>
     <input type="email" id="emailInput" placeholder="Enter your email">
     <button id="getKeyBtn">Generate Key</button>
     <p id="apiKeyDisplay"></p>
+    <button id="copyApiBtn" style="display:none;">📋 Copy API Key</button>
   </div>
 </div>
 
+<!-- Pro Modal (unchanged) -->
 <div id="proModal" class="modal">
   <div class="modal-content">
     <h2>Pro Packages</h2>
@@ -282,6 +274,7 @@ button:hover { background: #0056b3; }
     <p id="proRequestStatus"></p>
   </div>
 </div>
+ 
 
 <script>
 function refreshCaptcha(){
@@ -300,35 +293,49 @@ async function verifyCaptcha(){
     else{result.style.color="red";result.textContent="❌ "+data.message;refreshCaptcha();}
   }catch{result.style.color="orange";result.textContent="⚠️ Error verifying";}
 }
-
-document.getElementById("tryFreeBtn").onclick=()=>signupModal.style.display="block";
-document.getElementById("getProBtn").onclick=()=>proModal.style.display="block";
-
-document.getElementById("getKeyBtn").onclick=async()=>{
-  const email=document.getElementById("emailInput").value.trim();
-  const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
-  const data=await res.json();
-  document.getElementById("apiKeyDisplay").textContent=data.api_key?"✅ "+data.api_key:"❌ "+(data.error||"Error");
+document.getElementById("tryFreeBtn").onclick = () => {
+  document.getElementById("signupModal").style.display = "block";
+  document.getElementById("apiKeyDisplay").textContent = "";
+  document.getElementById("copyApiBtn").style.display = "none";
 };
 
-document.getElementById("requestProBtn").onclick=async()=>{
-  const email=document.getElementById("proEmail").value.trim();
-  const limit=parseInt(document.getElementById("proLimit").value)||1000;
-  const res=await fetch("/request-pro-api",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
-  const data=await res.json();
-  document.getElementById("proRequestStatus").textContent=data.status==="ok"?"✅ Request Sent!":"❌ "+(data.error||"Error");
+document.getElementById("getKeyBtn").onclick = async () => {
+  const email = document.getElementById("emailInput").value.trim();
+  const apiKeyDisplay = document.getElementById("apiKeyDisplay");
+  const copyApiBtn = document.getElementById("copyApiBtn");
+
+  if (!email) { alert("Enter your email first!"); return; }
+
+  const res = await fetch("/generate-free-key", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email })
+  });
+
+  const data = await res.json();
+  if (data.api_key) {
+    apiKeyDisplay.textContent = "✅ " + data.api_key;
+    copyApiBtn.style.display = "inline-block";
+  } else {
+    apiKeyDisplay.textContent = "❌ " + (data.error || "Error");
+    copyApiBtn.style.display = "none";
+  }
 };
-document.getElementById("copyBtn").addEventListener("click", async () => {
-  const text = document.getElementById("captchaInput").value.trim();
-  if (!text) { alert("Enter something to copy!"); return; }
+
+// Copy API key to clipboard
+document.getElementById("copyApiBtn").addEventListener("click", async () => {
+  const text = document.getElementById("apiKeyDisplay").textContent.replace("✅ ", "").trim();
+  if (!text || text.startsWith("❌")) { alert("No valid API key to copy!"); return; }
   try {
     await navigator.clipboard.writeText(text);
-    alert("✅ Captcha text copied!");
+    alert("✅ API Key copied to clipboard!");
   } catch (err) {
     console.error("Clipboard copy failed", err);
     alert("⚠️ Clipboard access denied!");
   }
 });
+
+
 </script>
 </body></html>
 """
