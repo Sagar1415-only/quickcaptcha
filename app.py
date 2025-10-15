@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string, send_file, redirect, url_for, session
 import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 
 # ---------------- CONFIG ----------------
 app = Flask(__name__)
@@ -83,7 +83,7 @@ def verify_captcha():
         captcha_time = datetime.now()
 
     # expiry
-    if datetime.now() - captcha_time > timedelta(minutes=5):
+    if datetime.now(timezone.utc).replace(tzinfo=None) - captcha_time > timedelta(minutes=5):
         return jsonify({"success": False, "message": "Captcha expired. Refresh to try again."})
 
     # too many attempts
@@ -243,6 +243,7 @@ button:hover { background: #0056b3; }
     <div class="captcha-verify">
       <input type="text" id="captchaInput" placeholder="Enter Captcha">
       <button onclick="verifyCaptcha()">Verify</button>
+      <button id="copyBtn">📋 Copy Captcha</button>
       <p id="captchaResult"></p>
     </div>
     <br>
@@ -317,6 +318,17 @@ document.getElementById("requestProBtn").onclick=async()=>{
   const data=await res.json();
   document.getElementById("proRequestStatus").textContent=data.status==="ok"?"✅ Request Sent!":"❌ "+(data.error||"Error");
 };
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const text = document.getElementById("captchaInput").value.trim();
+  if (!text) { alert("Enter something to copy!"); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("✅ Captcha text copied!");
+  } catch (err) {
+    console.error("Clipboard copy failed", err);
+    alert("⚠️ Clipboard access denied!");
+  }
+});
 </script>
 </body></html>
 """
