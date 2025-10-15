@@ -1,14 +1,15 @@
 from flask import Flask, request, jsonify, render_template_string, send_file, redirect, url_for, session
 import os, random, string, io, uuid, requests
 from captcha.image import ImageCaptcha
-from datetime import datetime, timedelta,timezone
+from datetime import datetime, timedelta, timezone
 
 # ---------------- CONFIG ----------------
 app = Flask(__name__)
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
-app.config["SESSION_TYPE"] = "filesystem"  # ensures persistence across requests
+app.config["SESSION_TYPE"] = "filesystem"
 app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey123")
+
 FREE_LIMIT = 100
 ADMIN_EMAIL = "sagarms121415@gmail.com"
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "sagar@123")
@@ -42,17 +43,15 @@ def send_email(to_email, subject, body):
 # ---------------- CAPTCHA GENERATION ----------------
 @app.route("/captcha")
 def captcha():
-    from datetime import datetime
     text = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
     session['captcha'] = text
-    session['captcha_time'] = datetime.now().isoformat()  # store as string
-    session['captcha_attempts'] = 0  # reset
+    session['captcha_time'] = datetime.now().isoformat()
+    session['captcha_attempts'] = 0
     image = ImageCaptcha()
     data = io.BytesIO()
     image.write(text, data)
     data.seek(0)
     return send_file(data, mimetype="image/png")
-
 
 # ---------------- ROOT ----------------
 @app.route("/")
@@ -62,18 +61,14 @@ def home():
 # ---------------- VERIFY CAPTCHA ----------------
 @app.route("/verify-captcha", methods=["POST"])
 def verify_captcha():
-    from datetime import datetime, timedelta
-
     data = request.get_json() or {}
     user_input = (data.get("user_input") or "").strip().upper()
     correct = session.get("captcha", "")
     captcha_time_str = session.get("captcha_time")
 
-    # if not generated
     if not correct:
         return jsonify({"success": False, "message": "Captcha not found. Refresh to try again."})
 
-    # parse stored timestamp safely
     if captcha_time_str:
         try:
             captcha_time = datetime.fromisoformat(captcha_time_str)
@@ -82,17 +77,14 @@ def verify_captcha():
     else:
         captcha_time = datetime.now()
 
-    # expiry
     if datetime.now(timezone.utc).replace(tzinfo=None) - captcha_time > timedelta(minutes=5):
         return jsonify({"success": False, "message": "Captcha expired. Refresh to try again."})
 
-    # too many attempts
     attempts = session.get("captcha_attempts", 0) + 1
     session["captcha_attempts"] = attempts
     if attempts > 5:
         return jsonify({"success": False, "message": "Too many attempts. Please refresh captcha."})
 
-    # check correctness
     success = user_input == correct
     if success:
         session.pop("captcha", None)
@@ -105,7 +97,6 @@ def verify_captcha():
         "success": success,
         "message": "Verified successfully!" if success else "Incorrect captcha. Try again!"
     })
-
 
 # ---------------- FREE API KEY ----------------
 @app.route("/generate-free-key", methods=["POST"])
@@ -182,52 +173,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <title>QuickCaptcha</title>
 <style>
-body {
-  font-family: 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #f8faff, #eef2f3);
-  text-align: center;
-  padding: 40px;
-}
-.container {
-  display: flex;
-  justify-content: center;
-  gap: 40px;
-  flex-wrap: wrap;
-}
-.card {
-  background: white;
-  padding: 25px;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-  width: 300px;
-}
-.captcha-verify {
-  margin-top: 15px;
-}
-.captcha-verify input {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-}
-.captcha-verify button {
-  padding: 8px 12px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-button:hover { background: #0056b3; }
-.modal {
-  display: none; position: fixed; z-index: 999;
-  left: 0; top: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.4);
-}
-.modal-content {
-  background: white; border-radius: 10px; padding: 20px;
-  width: 90%; max-width: 400px; margin: 10% auto;
-  text-align: center;
-}
+body { font-family:'Poppins',sans-serif; background: linear-gradient(135deg,#f8faff,#eef2f3); text-align:center; padding:40px;}
+.container { display:flex; justify-content:center; gap:40px; flex-wrap:wrap;}
+.card { background:white; padding:25px; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.1); width:300px;}
+.captcha-verify { margin-top:15px;}
+.captcha-verify input { padding:8px; border-radius:6px; border:1px solid #ccc;}
+.captcha-verify button { padding:8px 12px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer;}
+button:hover { background:#0056b3;}
+.modal { display:none; position:fixed; z-index:999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.4);}
+.modal-content { background:white; border-radius:10px; padding:20px; width:90%; max-width:400px; margin:10% auto; text-align:center;}
 </style>
 </head>
 <body>
@@ -240,12 +194,15 @@ button:hover { background: #0056b3; }
     <h2>Free Plan</h2>
     <p>For testing & small-scale apps</p>
     <img id="captcha-image" src="/captcha" alt="Captcha" style="width:240px;border:1px solid #ddd;border-radius:8px;">
-<div class="captcha-verify">
-  <input type="text" id="captchaInput" placeholder="Enter Captcha">
-  <button onclick="verifyCaptcha()">Verify</button>
+    <div class="captcha-verify">
+      <input type="text" id="captchaInput" placeholder="Enter Captcha">
+      <button onclick="verifyCaptcha()">Verify</button>
+    </div>
+    <br>
+    <button id="tryFreeBtn">Generate Free Key</button>
+    <button id="getProBtn">View Pro Plans</button>
+  </div>
 </div>
-<br>
-<button id="tryFreeBtn">Generate Free Key</button>
 
 <!-- Free API Key Modal -->
 <div id="signupModal" class="modal">
@@ -258,7 +215,6 @@ button:hover { background: #0056b3; }
   </div>
 </div>
 
-<!-- Pro Modal (unchanged) -->
 <!-- Pro Modal -->
 <div id="proModal" class="modal">
   <div class="modal-content">
@@ -277,91 +233,63 @@ button:hover { background: #0056b3; }
 </div>
 
 <script>
-// Show modals
-document.getElementById("tryFreeBtn").onclick = () => {
-  document.getElementById("signupModal").style.display = "block";
-  document.getElementById("apiKeyDisplay").textContent = "";
-  document.getElementById("copyApiBtn").style.display = "none";
-};
-document.getElementById("getProBtn").onclick = () => {
-  document.getElementById("proModal").style.display = "block";
-  document.getElementById("proRequestStatus").textContent = "";
-};
+function refreshCaptcha(){document.getElementById("captcha-image").src="/captcha?"+new Date().getTime();}
+async function verifyCaptcha(){
+  const input=document.getElementById("captchaInput").value.trim();
+  if(!input){alert("Enter captcha");return;}
+  const res=await fetch("/verify-captcha",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_input:input})});
+  const data=await res.json();
+  alert(data.message);
+}
 
-// Free API Key generation
-document.getElementById("getKeyBtn").onclick = async () => {
-  const email = document.getElementById("emailInput").value.trim();
-  const apiKeyDisplay = document.getElementById("apiKeyDisplay");
-  const copyApiBtn = document.getElementById("copyApiBtn");
+// Modals
+document.getElementById("tryFreeBtn").onclick=()=>{document.getElementById("signupModal").style.display="block"; document.getElementById("apiKeyDisplay").textContent=""; document.getElementById("copyApiBtn").style.display="none";}
+document.getElementById("getProBtn").onclick=()=>{document.getElementById("proModal").style.display="block"; document.getElementById("proRequestStatus").textContent="";}
 
-  if (!email) { alert("Enter your email first!"); return; }
-
-  const res = await fetch("/generate-free-key", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email })
-  });
-
-  const data = await res.json();
-  if (data.api_key) {
-    apiKeyDisplay.textContent = "✅ " + data.api_key;
-    copyApiBtn.style.display = "inline-block";
-  } else {
-    apiKeyDisplay.textContent = "❌ " + (data.error || "Error");
-    copyApiBtn.style.display = "none";
-  }
+// Free API Key
+document.getElementById("getKeyBtn").onclick=async()=>{
+  const email=document.getElementById("emailInput").value.trim();
+  const apiKeyDisplay=document.getElementById("apiKeyDisplay");
+  const copyApiBtn=document.getElementById("copyApiBtn");
+  if(!email){alert("Enter your email!"); return;}
+  const res=await fetch("/generate-free-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});
+  const data=await res.json();
+  if(data.api_key){apiKeyDisplay.textContent="✅ "+data.api_key; copyApiBtn.style.display="inline-block";} 
+  else{apiKeyDisplay.textContent="❌ "+(data.error||"Error"); copyApiBtn.style.display="none";}
 };
 
 // Copy Free API key
-document.getElementById("copyApiBtn").addEventListener("click", async () => {
-  const text = document.getElementById("apiKeyDisplay").textContent.replace("✅ ", "").trim();
-  if (!text || text.startsWith("❌")) { alert("No valid API key to copy!"); return; }
-  try { await navigator.clipboard.writeText(text); alert("✅ API Key copied to clipboard!"); }
-  catch (err) { console.error(err); alert("⚠️ Clipboard access denied!"); }
-});
+document.getElementById("copyApiBtn").addEventListener("click", async()=>{const text=document.getElementById("apiKeyDisplay").textContent.replace("✅ ","").trim(); if(!text || text.startsWith("❌")){alert("No valid API key");return;} try{await navigator.clipboard.writeText(text);alert("✅ Copied!");}catch(e){alert("❌ Clipboard error");}});
 
 // Pro API request
-document.getElementById("requestProBtn").onclick = async () => {
-  const email = document.getElementById("proEmail").value.trim();
-  const limit = parseInt(document.getElementById("proLimit").value) || 1000;
-  const statusEl = document.getElementById("proRequestStatus");
-
-  if (!email) { alert("Enter your email first!"); return; }
-
-  const res = await fetch("/request-pro-api", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, limit })
-  });
-
-  const data = await res.json();
-  if (data.status === "ok") statusEl.textContent = "✅ Request Sent!";
-  else statusEl.textContent = "❌ " + (data.error || "Error");
+document.getElementById("requestProBtn").onclick=async()=>{
+  const email=document.getElementById("proEmail").value.trim();
+  const limit=parseInt(document.getElementById("proLimit").value)||1000;
+  const statusEl=document.getElementById("proRequestStatus");
+  if(!email){alert("Enter email!"); return;}
+  const res=await fetch("/request-pro-api",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,limit})});
+  const data=await res.json();
+  statusEl.textContent=(data.status==="ok")?"✅ Request Sent!":"❌ "+(data.error||"Error");
 };
 
-// Close modals when clicking outside
-window.onclick = (event) => {
-  const freeModal = document.getElementById("signupModal");
-  const proModal = document.getElementById("proModal");
-  if (event.target == freeModal) freeModal.style.display = "none";
-  if (event.target == proModal) proModal.style.display = "none";
-};
+// Close modals
+window.onclick=(e)=>{if(e.target==document.getElementById("signupModal")) document.getElementById("signupModal").style.display="none"; if(e.target==document.getElementById("proModal")) document.getElementById("proModal").style.display="none";}
 </script>
 
-
-
-</script>
-</body></html>
+</body>
+</html>
 """
 
 DASHBOARD_HTML = """<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Dashboard</title>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Dashboard</title>
 <style>
 body{background:#f6f7fb;font-family:Poppins,sans-serif;text-align:center;}
 table{margin:auto;border-collapse:collapse;width:80%;}
 th,td{border:1px solid #ddd;padding:8px;}th{background:#007bff;color:#fff;}
 tr:nth-child(even){background:#f2f2f2;}
-</style></head><body>
+</style></head>
+<body>
 <h2>QuickCaptcha Dashboard</h2>
 <table><tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
 {% for k,v in api_keys.items() %}
