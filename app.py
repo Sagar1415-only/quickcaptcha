@@ -259,6 +259,7 @@ button:hover { background: #0056b3; }
 </div>
 
 <!-- Pro Modal (unchanged) -->
+<!-- Pro Modal -->
 <div id="proModal" class="modal">
   <div class="modal-content">
     <h2>Pro Packages</h2>
@@ -274,31 +275,20 @@ button:hover { background: #0056b3; }
     <p id="proRequestStatus"></p>
   </div>
 </div>
- 
 
 <script>
-function refreshCaptcha(){
-  const img = document.getElementById("captcha-image");
-  img.src = "/captcha?"+new Date().getTime();
-}
-
-async function verifyCaptcha(){
-  const input = document.getElementById("captchaInput").value.trim();
-  const result = document.getElementById("captchaResult");
-  if(!input){alert("Enter captcha");return;}
-  try{
-    const res = await fetch("/verify-captcha",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_input:input})});
-    const data = await res.json();
-    if(data.success){result.style.color="green";result.textContent="✅ Verified";}
-    else{result.style.color="red";result.textContent="❌ "+data.message;refreshCaptcha();}
-  }catch{result.style.color="orange";result.textContent="⚠️ Error verifying";}
-}
+// Show modals
 document.getElementById("tryFreeBtn").onclick = () => {
   document.getElementById("signupModal").style.display = "block";
   document.getElementById("apiKeyDisplay").textContent = "";
   document.getElementById("copyApiBtn").style.display = "none";
 };
+document.getElementById("getProBtn").onclick = () => {
+  document.getElementById("proModal").style.display = "block";
+  document.getElementById("proRequestStatus").textContent = "";
+};
 
+// Free API Key generation
 document.getElementById("getKeyBtn").onclick = async () => {
   const email = document.getElementById("emailInput").value.trim();
   const apiKeyDisplay = document.getElementById("apiKeyDisplay");
@@ -322,18 +312,42 @@ document.getElementById("getKeyBtn").onclick = async () => {
   }
 };
 
-// Copy API key to clipboard
+// Copy Free API key
 document.getElementById("copyApiBtn").addEventListener("click", async () => {
   const text = document.getElementById("apiKeyDisplay").textContent.replace("✅ ", "").trim();
   if (!text || text.startsWith("❌")) { alert("No valid API key to copy!"); return; }
-  try {
-    await navigator.clipboard.writeText(text);
-    alert("✅ API Key copied to clipboard!");
-  } catch (err) {
-    console.error("Clipboard copy failed", err);
-    alert("⚠️ Clipboard access denied!");
-  }
+  try { await navigator.clipboard.writeText(text); alert("✅ API Key copied to clipboard!"); }
+  catch (err) { console.error(err); alert("⚠️ Clipboard access denied!"); }
 });
+
+// Pro API request
+document.getElementById("requestProBtn").onclick = async () => {
+  const email = document.getElementById("proEmail").value.trim();
+  const limit = parseInt(document.getElementById("proLimit").value) || 1000;
+  const statusEl = document.getElementById("proRequestStatus");
+
+  if (!email) { alert("Enter your email first!"); return; }
+
+  const res = await fetch("/request-pro-api", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, limit })
+  });
+
+  const data = await res.json();
+  if (data.status === "ok") statusEl.textContent = "✅ Request Sent!";
+  else statusEl.textContent = "❌ " + (data.error || "Error");
+};
+
+// Close modals when clicking outside
+window.onclick = (event) => {
+  const freeModal = document.getElementById("signupModal");
+  const proModal = document.getElementById("proModal");
+  if (event.target == freeModal) freeModal.style.display = "none";
+  if (event.target == proModal) proModal.style.display = "none";
+};
+</script>
+
 
 
 </script>
