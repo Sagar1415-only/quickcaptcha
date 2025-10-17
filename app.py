@@ -1,5 +1,6 @@
 import os
 import uuid
+import re
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
@@ -9,6 +10,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "supersecretkey")
 
 FREE_LIMIT = 50
 DASHBOARD_PASSWORD = "admin123"
+ADMIN_EMAIL = "sagarms121415@gmail.com"
 api_keys = {}  # Store API keys
 
 # ---------------- FUNCTIONS ----------------
@@ -24,6 +26,16 @@ def reset_monthly_limits():
             val["last_reset"] = now.isoformat()
             print(f"[RESET] Free API key {key} reset for new month.")
 
+
+def send_email(to, subject, message):
+    """Simulate email sending by printing to logs."""
+    print(f"\n============================")
+    print(f"📧 TO: {to}")
+    print(f"SUBJECT: {subject}")
+    print(f"MESSAGE:\n{message}")
+    print(f"============================\n")
+
+
 # ---------------- ROUTES ----------------
 @app.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
@@ -34,10 +46,110 @@ def generate_free_key():
     api_keys[key] = {"email": email, "count": 0, "emailed": False, "last_reset": datetime.now().isoformat()}
     reset_monthly_limits()
 
-    # Placeholder for sending email
-    print(f"[EMAIL] Sending free API key to {email}: {key}")
+    # Send Free API key email
+    send_email(
+        email,
+        "🎉 Your QuickCaptcha Free API Key",
+        f"""Hello {email},
+
+Here is your free API key:
+{key}
+
+Limit: {FREE_LIMIT} requests per month.
+
+Enjoy using QuickCaptcha!
+
+---
+⚡ Need higher limits or business features?
+
+Upgrade to **QuickCaptcha Pro** — get more requests, faster delivery, and premium support.
+
+Choose your preferred monthly plan:
+
+• Lite — ₹100 / $1.5 — Limited customization (color/background only)  
+• Starter — 1,000 requests — ₹199 / $3  
+• Growth — 5,000 requests — ₹599 / $8  
+• Business — 20,000+ requests — ₹1,499 / $18  
+
+💡 The bigger the plan, the more value for your project.
+
+To upgrade:
+👉 Visit: https://quickcaptcha.onrender.com  
+📩 Or email: {ADMIN_EMAIL}
+
+— QuickCaptcha Team
+"""
+    )
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
+
+
+@app.route("/request-pro-payment", methods=["POST"])
+def request_pro_payment():
+    data = request.get_json()
+    email = (data.get("email") or "").strip().lower()
+    plan = data.get("plan")
+    price = data.get("price")
+    description = data.get("description", "")
+
+    # Email validation
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return jsonify({"error": "Invalid email format"}), 400
+
+    # Log the request
+    print(f"[ADMIN LOG] Pro API request received from {email}")
+
+    # Send confirmation emails
+    send_email(
+        email,
+        f"💼 QuickCaptcha Pro Plan Request Received — {plan}",
+        f"""Hello {email},
+
+Thank you for your interest in QuickCaptcha Pro!
+
+Your selected plan: **{plan}**  
+Price: ₹{price}  
+
+Your project description:
+{description}
+
+Available customization options:
+🎨 Background, logo, and color adjustments.
+
+Current plans:
+• Lite — ₹100 / $1.5 — Limited customization (color/background)  
+• Starter — ₹199 / $3 — 1,000 requests/month  
+• Growth — ₹599 / $8 — 5,000 requests/month  
+• Business — ₹1,499 / $18 — 20,000+ requests/month  
+
+Next Step:
+💰 Please pay 50% upfront (₹{round(price/2,2)}) to proceed with customization and activation.  
+The remaining 50% is due upon completion.
+
+Once payment is done, you'll receive setup confirmation and credentials within 24 hours.
+
+Best regards,  
+— QuickCaptcha Pro Team
+📩 {ADMIN_EMAIL}
+"""
+    )
+
+    # Notify admin (you)
+    send_email(
+        ADMIN_EMAIL,
+        f"📩 New Pro Plan Request — {plan}",
+        f"""User: {email}
+Plan: {plan}
+Price: ₹{price}
+Description: {description}
+Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Payment pending (50% upfront).  
+After payment confirmation, send setup response to user.
+"""
+    )
+
+    return jsonify({"status": "ok"})
 
 
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -104,7 +216,7 @@ body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial
 .msg{margin-top:8px;font-weight:600}
 .msg.success{color:var(--success)}
 .msg.error{color:var(--danger)}
-.small{font-size:13px;color:var(--muted);margin-top:6px}
+.small{font-size:13px;color:#6b7280;margin-top:6px}
 
 /* Pro table */
 .table-wrap{overflow:auto;border-radius:8px;border:1px solid #eef2f6}
@@ -161,25 +273,20 @@ body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial
    <!-- Pro Plan Card -->
    <div class="card pro-card">
      <h2>Pro Plan</h2>
-     <p class="muted">For startups and businesses — higher limits, priority support, custom styling.</p>
+     <p class="muted">For startups and businesses — higher limits, priority support, and custom styling.</p>
 
      <!-- Pro Plans Table -->
      <div class="table-wrap" style="margin-top:12px">
        <table class="pro-table" aria-label="Pro Plans">
          <thead>
-           <tr>
-             <th>Plan</th>
-             <th>Limit</th>
-             <th>Price</th>
-             <th>Action</th>
-           </tr>
+           <tr><th>Plan</th><th>Limit</th><th>Price</th><th>Action</th></tr>
          </thead>
          <tbody>
            <tr>
-             <td>Basic</td>
-             <td>Minimal customization (background/logo)</td>
+             <td>Lite</td>
+             <td>Limited customization (color/bg only)</td>
              <td>₹100 / $1.5</td>
-             <td><button class="btn selectProBtn" data-plan="Basic" data-price="100">Select</button></td>
+             <td><button class="btn selectProBtn" data-plan="Lite" data-price="100">Select</button></td>
            </tr>
            <tr>
              <td>Starter</td>
@@ -235,157 +342,79 @@ body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial
  </div>
 
 <script>
-let selectedPlan = null;
-let selectedPrice = 0;
+let selectedPlan=null,selectedPrice=0;
 
-// Plan selection buttons
-document.querySelectorAll(".selectProBtn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    selectedPlan = btn.getAttribute("data-plan");
-    selectedPrice = parseFloat(btn.getAttribute("data-price"));
-    document.getElementById("proPayBtn").disabled = false;
-    document.getElementById("proStatus").textContent = `Selected Plan: ${selectedPlan} — ₹${selectedPrice}`;
-  });
+// select plan
+document.querySelectorAll(".selectProBtn").forEach(btn=>{
+ btn.addEventListener("click",()=>{
+   selectedPlan=btn.getAttribute("data-plan");
+   selectedPrice=parseFloat(btn.getAttribute("data-price"));
+   document.getElementById("proPayBtn").disabled=false;
+   document.getElementById("proStatus").style.color="";
+   document.getElementById("proStatus").textContent=`Selected: ${selectedPlan} — ₹${selectedPrice}`;
+ });
 });
 
-// Payment button
-document.getElementById("proPayBtn").addEventListener("click", async () => {
-  const email = document.getElementById("proEmail").value.trim();
-  const description = document.getElementById("proDescription").value.trim();
-  const statusEl = document.getElementById("proStatus");
-  statusEl.textContent = "";
+// payment
+document.getElementById("proPayBtn").addEventListener("click",async()=>{
+ const email=document.getElementById("proEmail").value.trim();
+ const desc=document.getElementById("proDescription").value.trim();
+ const status=document.getElementById("proStatus");
 
-  if (!email) { statusEl.textContent = "Enter your email"; return; }
-  if (!selectedPlan) { statusEl.textContent = "Select a plan"; return; }
-  if (!description) { statusEl.textContent = "Describe your requirements"; return; }
+ if(!email){status.textContent="⚠️ Enter your email";return;}
+ if(!/^[^@]+@[^@]+\\.[^@]+$/.test(email)){status.textContent="⚠️ Enter a valid email address";return;}
+ if(!selectedPlan){status.textContent="⚠️ Select a plan";return;}
+ if(!desc){status.textContent="⚠️ Describe your requirements";return;}
 
-  try {
-    const res = await fetch("/request-pro-payment", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ email, plan: selectedPlan, price: selectedPrice, description })
-    });
-    const data = await res.json();
-    if (data.status === "ok") {
-      statusEl.style.color = "var(--success)";
-      statusEl.textContent = "✅ Request submitted! Payment link sent to your email.";
-    } else {
-      statusEl.style.color = "var(--danger)";
-      statusEl.textContent = "❌ " + (data.error || "Request failed");
-    }
-  } catch (err) {
-    statusEl.style.color = "var(--danger)";
-    statusEl.textContent = "⚠️ Error sending request";
-  }
-});
-
-// refresh captcha
-function refreshCaptcha(){
- const img = document.getElementById("captcha-image");
- img.src = "/captcha?"+Date.now();
-}
-document.getElementById("refreshBtn").addEventListener("click", refreshCaptcha);
-
-// captcha verify
-document.getElementById("verifyBtn").addEventListener("click", async () => {
- const input = document.getElementById("captchaInput").value.trim();
- const messageEl = document.getElementById("verifyMessage");
- messageEl.textContent = "";
- if (!input) { messageEl.className="msg error"; messageEl.textContent="Enter captcha"; return; }
- try {
-   const res = await fetch("/verify-captcha", {
-     method: "POST",
-     headers: {"Content-Type":"application/json"},
-     body: JSON.stringify({user_input: input})
-   });
-   const data = await res.json();
-   if (data.success) {
-     messageEl.className = "msg success";
-     messageEl.textContent = "✅ " + (data.message || "Verified successfully!");
-   } else {
-     messageEl.className = "msg error";
-     messageEl.textContent = "❌ " + (data.message || "Incorrect captcha. Try again!");
-     refreshCaptcha();
+ try{
+   const res=await fetch("/request-pro-payment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,plan:selectedPlan,price:selectedPrice,description:desc})});
+   const data=await res.json();
+   if(data.status==="ok"){
+     status.style.color="var(--success)";
+     status.textContent="✅ Request submitted! Check your email for payment link.";
+   }else{
+     status.style.color="var(--danger)";
+     status.textContent="❌ "+(data.error||"Error submitting request");
    }
- } catch (err) {
-   messageEl.className = "msg";
-   messageEl.textContent = "⚠️ Error verifying captcha";
+ }catch(e){
+   status.style.color="var(--danger)";
+   status.textContent="⚠️ Request failed";
  }
-});
-
-// Free API modal handling
-const freeModal = document.getElementById("freeModal");
-document.getElementById("openFreeModal").addEventListener("click", () => {
- freeModal.style.display = "flex";
- document.getElementById("apiKeyDisplay").textContent = "";
- document.getElementById("copyApiBtn").style.display = "none";
-});
-document.getElementById("closeModalBtn").addEventListener("click", () => { freeModal.style.display = "none"; });
-
-// generate free key
-document.getElementById("getKeyBtnModal").addEventListener("click", async () => {
- const email = (document.getElementById("emailInput").value || "").trim();
- const display = document.getElementById("apiKeyDisplay");
- const copyBtn = document.getElementById("copyApiBtn");
- if (!email) { display.textContent = "Enter email"; return; }
- try {
-   const res = await fetch("/generate-free-key", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email})});
-   const data = await res.json();
-   if (data.api_key) {
-     display.textContent = "✅ " + data.api_key;
-     copyBtn.style.display = "inline-block";
-   } else {
-     display.textContent = "❌ " + (data.error || "Error generating key");
-     copyBtn.style.display = "none";
-   }
- } catch (err) {
-   display.textContent = "❌ Error";
-   copyBtn.style.display = "none";
- }
-});
-
-// copy api key
-document.getElementById("copyApiBtn").addEventListener("click", async () => {
- const txt = document.getElementById("apiKeyDisplay").textContent.replace("✅ ","").trim();
- if (!txt) { alert("No API key to copy"); return; }
- try {
-   await navigator.clipboard.writeText(txt);
-   alert("✅ API Key copied to clipboard!");
- } catch (e) {
-   alert("⚠️ Clipboard access denied.");
- }
-});
-
-// close modal on outside click
-window.addEventListener("click", (e) => {
- if (e.target === freeModal) freeModal.style.display = "none";
 });
 </script>
-</body>
-</html>
+</body></html>
 """
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Dashboard</title>
 <style>
 body{background:#f6f7fb;font-family:Inter,system-ui;font-size:14px;color:#0f172a;text-align:center;padding:24px}
-.container{max-width:900px;margin:0 auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.06)}
-table{margin:auto;border-collapse:collapse;width:100%}
-th,td{border:1px solid #e6eef9;padding:10px;text-align:left}
-th{background:#f1f8ff;color:#0f172a;font-weight:600}
-tr:nth-child(even){background:#fbfdff}
-a{color:#2563eb;text-decoration:none}
-</style></head><body>
+.container{max-width:900px;margin:0 auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.1)}
+table{width:100%;border-collapse:collapse;margin-top:20px}
+th,td{border:1px solid #e6e7ee;padding:8px 10px;text-align:left;font-size:13px}
+th{background:#eef2ff}
+</style></head>
+<body>
 <div class="container">
-<h2>QuickCaptcha Dashboard</h2>
-<table><tr><th>Email</th><th>API Key</th><th>Used</th><th>Remaining</th></tr>
+<h2>Admin Dashboard</h2>
+<p>Total Keys: {{api_keys|length}}</p>
+<table>
+<tr><th>Email</th><th>Key</th><th>Usage</th><th>Last Reset</th></tr>
 {% for k,v in api_keys.items() %}
-<tr><td>{{v['email']}}</td><td style="word-break:break-all">{{k}}</td><td>{{v['count']}}</td><td>{{free_limit - v['count']}}</td></tr>
+<tr>
+<td>{{v.email}}</td>
+<td>{{k}}</td>
+<td>{{v.count}} / {{free_limit}}</td>
+<td>{{v.last_reset}}</td>
+</tr>
 {% endfor %}
-</table><br><a href="/logout">Logout</a>
-</div>
-</body></html>"""
+</table>
+<a href='/logout'>Logout</a>
+</div></body></html>"""
 
-# ---------------- RUN ----------------
+@app.route("/")
+def home():
+    return render_template_string(HTML_TEMPLATE, FREE_LIMIT=FREE_LIMIT)
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    app.run(debug=True, host="0.0.0.0", port=10000)
