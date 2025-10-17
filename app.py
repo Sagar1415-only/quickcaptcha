@@ -272,7 +272,7 @@ def generate_free_key():
     api_keys[key]["emailed"] = bool(sent_user)
 
     return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
-pp.route("/generate-free-key", methods=["POST"])
+app.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
     reset_monthly_limits()
     data = request.get_json() or {}
