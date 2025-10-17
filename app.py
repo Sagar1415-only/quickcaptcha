@@ -7,6 +7,7 @@ import smtplib
 import random
 import string
 from email.message import EmailMessage
+from email.mime.text import MIMEText
 from datetime import datetime
 from flask import (
     Flask, request, jsonify, render_template_string,
@@ -49,8 +50,18 @@ def reset_monthly_limits():
             val["last_reset"] = now.isoformat()
             print(f"[RESET] Free API key {key} reset for new month.")
 
+import smtplib
+from email.message import EmailMessage
+import os
+
+# Gmail SMTP config
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+EMAIL_USER = os.environ.get("EMAIL_USER")  # your Gmail address
+EMAIL_PASS = os.environ.get("EMAIL_PASSWORD")  # the 16-character app password
+
 def send_email_smtp(to_email, subject, html_body):
-    """Try to send email via SMTP (Gmail). If EMAIL_USER/PASS not set, fallback to printing."""
+    """Send email via Gmail SMTP with App Password."""
     if not EMAIL_USER or not EMAIL_PASS:
         print("⚠️ SMTP credentials not configured — printing email instead.")
         print(f"To: {to_email}\nSubject: {subject}\n\n{html_body}")
@@ -68,6 +79,7 @@ def send_email_smtp(to_email, subject, html_body):
             s.starttls()
             s.login(EMAIL_USER, EMAIL_PASS)
             s.send_message(msg)
+
         print(f"📧 Sent email to {to_email} via SMTP ({subject})")
         return True
     except Exception as e:
@@ -75,6 +87,7 @@ def send_email_smtp(to_email, subject, html_body):
         print("Falling back to printing the email content.")
         print(f"To: {to_email}\nSubject: {subject}\n\n{html_body}")
         return False
+
 
 def build_free_key_email(email, key):
     # HTML email content advertising Pro plans and contact
