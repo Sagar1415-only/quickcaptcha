@@ -220,7 +220,7 @@ def verify_captcha():
     return jsonify({"success": success, "message": "Verified" if success else "Incorrect captcha"})
 
 # ---------------- FREE KEY ----------------
-@aimport re
+import re
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
 
 @app.route("/generate-free-key", methods=["POST"])
