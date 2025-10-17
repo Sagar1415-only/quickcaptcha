@@ -48,11 +48,14 @@ def reset_monthly_limits():
             val["last_reset"] = now.isoformat()
             print(f"[RESET] Free API key {key} reset for new month.")
 
+import smtplib
+from email.message import EmailMessage
+import ssl
+
 def send_email_brevo(to_email, subject, html_body):
-    """Send email via Gmail brevo with App Password."""
     if not EMAIL_USER or not EMAIL_PASS:
-        print("⚠️ brevo credentials not configured — printing email instead.")
-        print(f"To: {to_email}\nSubject: {subject}\n\n{html_body}")
+        print("⚠️ Email credentials not configured. Printing email instead.")
+        print(f"To: {to_email}\nSubject: {subject}\n{html_body}")
         return False
 
     try:
@@ -62,19 +65,19 @@ def send_email_brevo(to_email, subject, html_body):
         msg["Subject"] = subject
         msg.set_content(html_body, subtype="html")
 
-        with brevolib.brevo(brevo_SERVER, brevo_PORT) as s:
-            s.ehlo()
-            s.starttls()
-            s.login(EMAIL_USER, EMAIL_PASS)
-            s.send_message(msg)
+        context = ssl.create_default_context()
+        with smtplib.SMTP(brevo_SERVER, brevo_PORT) as server:
+            server.ehlo()
+            server.starttls(context=context)
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
 
-        print(f"📧 Sent email to {to_email} via brevo ({subject})")
+        print(f"📧 Sent email to {to_email}")
         return True
     except Exception as e:
-        print("❌ brevo send error:", e)
-        print("Falling back to printing the email content.")
-        print(f"To: {to_email}\nSubject: {subject}\n\n{html_body}")
+        print("❌ Email send error:", e)
         return False
+
 
 def request_host_or_site():
     return os.environ.get("PUBLIC_URL", "https://quickcaptcha.onrender.com")
