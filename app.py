@@ -220,7 +220,59 @@ def verify_captcha():
     return jsonify({"success": success, "message": "Verified" if success else "Incorrect captcha"})
 
 # ---------------- FREE KEY ----------------
+@aimport re
+EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
+
 @app.route("/generate-free-key", methods=["POST"])
+def generate_free_key():
+    reset_monthly_limits()
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email or not EMAIL_REGEX.match(email):
+        return jsonify({"error": "Valid email required"}), 400
+
+    # Reuse a key for same email (preserve monthly reset logic)
+    for k, v in api_keys.items():
+        if v.get("email") == email:
+            return jsonify({"api_key": k, "free_limit": FREE_LIMIT})
+
+    # Generate new API key
+    key = str(uuid.uuid4())
+    api_keys[key] = {
+        "email": email,
+        "count": 0,
+        "emailed": False,
+        "last_reset": datetime.utcnow().isoformat()
+    }
+
+    # Send email to user with plan advertising
+    user_html = f"""
+    <h3>🎉 Your QuickCaptcha Free API Key</h3>
+    <p>Email: {email}</p>
+    <p>API Key: <strong>{key}</strong></p>
+    <p>Limit: {FREE_LIMIT} requests per month</p>
+    <p>Try our Pro Plans for higher limits, customization, and priority support!</p>
+    <ul>
+        <li>₹100 — Limited customization</li>
+        <li>₹199 — Starter</li>
+        <li>₹599 — Growth</li>
+        <li>₹1499 — Business</li>
+    </ul>
+    <p>Enjoy testing QuickCaptcha!</p>
+    """
+    sent_user = send_email_smtp(email, "🎉 Your QuickCaptcha Free API Key", user_html)
+
+    # Notify admin
+    admin_html = f"""
+    <p>User <strong>{email}</strong> generated a free API key: <code>{key}</code></p>
+    <p>Time: {datetime.utcnow().isoformat()}</p>
+    """
+    sent_admin = send_email_smtp(ADMIN_EMAIL, f"🔔 New Free API Key for {email}", admin_html)
+
+    api_keys[key]["emailed"] = bool(sent_user)
+
+    return jsonify({"api_key": key, "free_limit": FREE_LIMIT})
+pp.route("/generate-free-key", methods=["POST"])
 def generate_free_key():
     reset_monthly_limits()
     data = request.get_json() or {}
@@ -277,18 +329,40 @@ def request_pro_payment():
     })
 
     # send user email with next steps (50% payment)
-    user_html = build_pro_request_user_email(email, plan, price, description)
+    user_html = f"""
+    <h3>💼 QuickCaptcha Pro Request: {plan}</h3>
+    <p>Hello {email},</p>
+    <p>Thank you for choosing the <strong>{plan}</strong> plan (₹{price}).</p>
+    <p>Your description / requirements:</p>
+    <blockquote>{description}</blockquote>
+    <p>Please proceed with 50% advance payment to confirm your plan. Once received, we will start the service and notify you.</p>
+    <p>Pro Plans Overview:</p>
+    <ul>
+        <li>₹100 — Limited customization (message & logo)</li>
+        <li>₹199 — Starter</li>
+        <li>₹599 — Growth</li>
+        <li>₹1499 — Business</li>
+    </ul>
+    <p>Contact us for support: <a href="mailto:{ADMIN_EMAIL}">{ADMIN_EMAIL}</a></p>
+    """
     send_email_smtp(email, f"💼 QuickCaptcha Pro Request: {plan}", user_html)
 
     # notify admin
-    admin_html = build_pro_request_admin_email(email, plan, price, description)
+    admin_html = f"""
+    <h3>📩 New Pro API Request</h3>
+    <p>User: <strong>{email}</strong></p>
+    <p>Plan: {plan} — ₹{price}</p>
+    <p>Description:</p>
+    <blockquote>{description}</blockquote>
+    <p>Time: {datetime.utcnow().isoformat()}</p>
+    """
     send_email_smtp(ADMIN_EMAIL, f"📩 New Pro API Request — {plan}", admin_html)
 
     return jsonify({"status": "ok"})
 
+
 @app.route("/confirm-pro-payment", methods=["POST"])
 def confirm_pro_payment():
-    # This endpoint should be called by your payment processor webhook after 50% payment
     data = request.get_json() or {}
     email = (data.get("email") or "").strip().lower()
     plan = data.get("plan") or ""
@@ -300,21 +374,27 @@ def confirm_pro_payment():
 
     # notify admin upon payment
     admin_html = f"""
-    <p>50% Payment Received</p>
-    <p>User: {email}<br>Plan: {plan}<br>Amount: ₹{paid_amount}<br>Note: {note}</p>
+    <h3>✅ 50% Payment Received</h3>
+    <p>User: {email}</p>
+    <p>Plan: {plan}</p>
+    <p>Amount Paid: ₹{paid_amount}</p>
+    <p>Note: {note}</p>
     <p>Time: {datetime.utcnow().isoformat()}</p>
     """
     send_email_smtp(ADMIN_EMAIL, f"✅ Payment Received — {email}", admin_html)
 
     # send receipt/confirmation to user
     user_html = f"""
-    <p>Thank you — we received your payment of ₹{paid_amount} for plan <strong>{plan}</strong>.</p>
-    <p>We will start work and notify you when the project is complete.</p>
-    <p>Contact: <a href="mailto:{ADMIN_EMAIL}">{ADMIN_EMAIL}</a></p>
+    <h3>💳 Payment Confirmation — QuickCaptcha Pro</h3>
+    <p>Hello {email},</p>
+    <p>We have received your payment of ₹{paid_amount} for the <strong>{plan}</strong> plan.</p>
+    <p>We will start your service and notify you once it is completed.</p>
+    <p>If you have any questions, contact us at <a href="mailto:{ADMIN_EMAIL}">{ADMIN_EMAIL}</a></p>
     """
     send_email_smtp(email, "💳 Payment Received — QuickCaptcha Pro", user_html)
 
     return jsonify({"status": "ok"})
+
 
 # ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
