@@ -158,6 +158,50 @@ def verify():
         color = "#e74c3c"
 
     return render_template_string(HTML_TEMPLATE, message=message, color=color)
+    @app.route("/register_client", methods=["POST"])
+def register_client():
+    data = request.get_json()
+    client_name = data.get("client_name", "UnnamedClient")
+
+    clients = load_clients()
+    client_id = str(uuid.uuid4())
+    clients[client_id] = {
+        "name": client_name,
+        "logo": "default_logo.png",
+        "theme": "light",
+        "custom": {}
+    }
+    save_clients(clients)
+
+    return jsonify({"client_id": client_id, "message": "Client registered successfully"})
+
+@app.route("/client/<client_id>")
+def client_page(client_id):
+    clients = load_clients()
+    client = clients.get(client_id)
+
+    if not client:
+        return "Invalid client ID", 404
+
+    logo = client.get("logo", "default_logo.png")
+    theme = client.get("theme", "light")
+
+    bg_color = "#111" if theme == "dark" else "#ffffff"
+    text_color = "#fff" if theme == "dark" else "#000"
+
+    html = f"""
+    <html>
+    <head><title>{client['name']} - QuickCaptcha</title></head>
+    <body style="background:{bg_color}; color:{text_color}; text-align:center;">
+        <img src="{logo}" alt="Logo" style="width:100px;margin-top:30px;"><br>
+        <h2>{client['name']} - CAPTCHA Demo</h2>
+        <iframe src="/captcha" style="border:none;width:300px;height:150px;"></iframe>
+    </body>
+    </html>
+    """
+    return html
+
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
