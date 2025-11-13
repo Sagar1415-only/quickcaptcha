@@ -2,6 +2,22 @@ from flask import Flask, request, jsonify, render_template_string, send_file
 import os, random, string, io
 from captcha.image import ImageCaptcha
 
+import json, uuid
+CLIENTS_FILE = "client_configs.json"
+
+def load_clients():
+    if os.path.exists(CLIENTS_FILE):
+        with open(CLIENTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_clients(data):
+    with open(CLIENTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+clients = load_clients()
+
+
 app = Flask(__name__)
 
 CAPTCHA_STORE = {}
