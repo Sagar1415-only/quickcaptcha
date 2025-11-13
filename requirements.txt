@@ -2,3 +2,4 @@ Flask
 captcha
 Pillow==9.5.0
 gunicorn
+sib_api_v3_sdk
