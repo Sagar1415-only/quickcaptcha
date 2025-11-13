@@ -158,7 +158,7 @@ def verify():
         color = "#e74c3c"
 
     return render_template_string(HTML_TEMPLATE, message=message, color=color)
-    @app.route("/register_client", methods=["POST"])
+@app.route("/register_client", methods=["POST"])
 def register_client():
     data = request.get_json()
     client_name = data.get("client_name", "UnnamedClient")
