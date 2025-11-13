@@ -1,17 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, send_file
-import os, random, string, io
-from captcha.image import ImageCaptcha
-
-import json, uuid
-CLIENTS_FILE = "client_configs.json"
-
-def load_clients():
-    if os.path.exists(CLIENTS_FILE):
-        with open(CLIENTS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_clients(data):# app.py
+#def save_clients(data): app.py
 import os
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
@@ -668,13 +655,12 @@ def home():
 if __name__ == "__main__":
     # debug True for local development; set to False in production
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=True)
-    with open(CLIENTS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-clients = load_clients()
 
 
-app = Flask(__name__)
+
+
+
+'''app = Flask(__name__)
 
 CAPTCHA_STORE = {}
 
@@ -857,8 +843,65 @@ def client_page(client_id):
     """
     return html
 
+# ===== CLIENT MANAGEMENT SECTION =====
+@app.route("/register_client", methods=["POST"])
+def register_client():
+    data = request.get_json()
+    client_name = data.get("client_name", "UnnamedClient")
 
+    clients = load_clients()
+    client_id = str(uuid.uuid4())
+    clients[client_id] = {
+        "name": client_name,
+        "logo": "default_logo.png",
+        "theme": "light",
+        "custom": {}
+    }
+    save_clients(clients)
+    def create_client(name, logo, theme, custom=False):
+    clients = load_clients()
+    client_id = str(uuid.uuid4())
+    clients[client_id] = {
+        "name": name,
+        "logo": logo,
+        "theme": theme,
+        "custom": custom
+    }
+    save_clients(clients)
+    api_key = str(uuid.uuid4())
+    return client_id, api_key
+
+
+    return jsonify({"client_id": client_id, "message": "Client registered successfully"})
+
+
+@app.route("/client/<client_id>")
+def client_page(client_id):
+    clients = load_clients()
+    client = clients.get(client_id)
+
+    if not client:
+        return "Invalid client ID", 404
+
+    logo = client.get("logo", "default_logo.png")
+    theme = client.get("theme", "light")
+
+    bg_color = "#111" if theme == "dark" else "#ffffff"
+    text_color = "#fff" if theme == "dark" else "#000"
+
+    html = f"""
+    <html>
+    <head><title>{client['name']} - QuickCaptcha</title></head>
+    <body style="background:{bg_color}; color:{text_color}; text-align:center;">
+        <img src="{logo}" alt="Logo" style="width:100px;margin-top:30px;"><br>
+        <h2>{client['name']} - CAPTCHA Demo</h2>
+        <iframe src="/captcha" style="border:none;width:300px;height:150px;"></iframe>
+    </body>
+    </html>
+    """
+    return html
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+    '''
